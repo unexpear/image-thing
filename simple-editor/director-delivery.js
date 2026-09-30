@@ -1,5 +1,5 @@
 import {safeAreaGuideControls, titleOverlayText} from './director-title-styles.js';
-import {usesBoards,boardFrames} from './director-planning-state.js';
+import {usesBoards,boardFrames,planStill} from './director-planning-state.js';
 import {STAGES,animationPassGateMessages,animationPassLabel,animationPassStatus} from './director-production.js';
 import {shotTimeline,frameTime} from './director-animatic.js';
 
@@ -8,7 +8,7 @@ export function deliveryChecks(project){
  if(!entries.length)issues.push({message:'Add at least one shot.',kind:'Assembly'});
  for(const entry of entries){
   const s=entry.shot,add=(kind,message)=>issues.push({shotId:s.id,kind,message});
-  if(usesBoards(s)){if(!s.panels?.length||s.panels.some(p=>!p.media))add('Assembly','Attach every storyboard panel drawing.');if(boardFrames(s)!==s.seconds*24)add('Assembly','Match panel frames to shot duration.');}else if(!s.media)add('Assembly','Attach a storyboard image or clip.');
+  if(usesBoards(s)){if(!s.panels?.length||s.panels.some(p=>!p.media&&!planStill(s)))add('Assembly','Attach every storyboard panel drawing, or paint a layout drawing or color frame.');if(boardFrames(s)!==s.seconds*24)add('Assembly','Match panel frames to shot duration.');}else if(!s.media&&!planStill(s))add('Assembly','Attach a storyboard image or clip, or paint a layout drawing or color frame.');
   if(!(s.action||'').trim())add('Planning','Add an action / storyboard brief.');
   const changes=STAGES.filter(stage=>s.production?.[stage]==='Needs changes');
   if(changes.length)add('Review','Changes requested: '+changes.join(', '));

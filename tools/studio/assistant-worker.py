@@ -1,11 +1,13 @@
 """Run installed local-model helpers in their isolated bridge environment."""
 import asyncio
 import audioop
+import base64
 import json
 import math
 from pathlib import Path
 import sys
 import subprocess
+import urllib.request
 import wave
 
 sys.path.insert(0, r'D:\ai\Local-Models')
@@ -84,6 +86,43 @@ async def speak(request):
         raise
 
 
+async def chat_endpoint(request):
+    """OpenAI-compatible chat on this computer: Ollama, LM Studio, llama.cpp, or a custom server."""
+    emit({'stage': 'Asking the model on this computer…'})
+    content = request['prompt']
+    image_file = request.get('image_file')
+    if image_file:
+        path = Path(image_file)
+        mime = {'.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp'}.get(path.suffix.lower())
+        if not path.is_file() or not mime:
+            raise RuntimeError('The review image must be a local PNG, JPEG, or WebP.')
+        encoded = base64.b64encode(path.read_bytes()).decode('ascii')
+        content = [{'type': 'text', 'text': request['prompt']}, {'type': 'image_url', 'image_url': {'url': 'data:' + mime + ';base64,' + encoded}}]
+    payload = json.dumps({
+        'model': request['chat_model'],
+        'messages': [{'role': 'user', 'content': content}],
+        'max_tokens': int(request.get('max_tokens') or 512),
+        'temperature': 0.7,
+    }).encode()
+    def post():
+        call = urllib.request.Request(request['endpoint'], data=payload, headers={'Content-Type': 'application/json'})
+        with urllib.request.urlopen(call, timeout=180) as response:
+            return json.load(response)
+    try:
+        data = await asyncio.to_thread(post)
+    except Exception as error:
+        raise RuntimeError('The local chat server did not answer. Start Ollama, LM Studio, or your custom server, and check the model name. ' + str(error)) from error
+    try:
+        text = data['choices'][0]['message']['content']
+        if isinstance(text, list):
+            text = ''.join(part.get('text', '') if isinstance(part, dict) else str(part) for part in text)
+    except (KeyError, IndexError, TypeError):
+        raise RuntimeError('The local chat server replied in an unexpected shape.')
+    if not isinstance(text, str) or not text.strip():
+        raise RuntimeError('The local chat server returned an empty reply.')
+    return {'text': text}
+
+
 async def main():
     request = json.load(sys.stdin)
     marker = Path(sys.argv[1])
@@ -92,7 +131,7 @@ async def main():
         vision=request['model']=='vision'
         spec=importlib.util.spec_from_file_location('local_review',Path(__file__).with_name('vision-review.py' if vision else 'lipsync-worker.py'));module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
         work=module.review(request,emit) if vision else module.analyze(request,emit)
-    else:work=speak(request) if request.get('model') in ENGINES else bridge.run_local_model(ctx=Progress(), **request)
+    else:work=chat_endpoint(request) if request.get('model')=='endpoint' else speak(request) if request.get('model') in ENGINES else bridge.run_local_model(ctx=Progress(), **request)
     task = asyncio.create_task(work)
     async def cancellation():
         while not task.done():

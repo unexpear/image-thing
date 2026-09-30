@@ -2,6 +2,7 @@ import { setupCleanup, applyDirectorBrief } from './cleanup.js';
 import {loadDirectorReferences} from './director-references.js';
 import {setMaskSource, restoreReferences, applyImageControls} from './image-controls.js';
 import { trackEvent, trackFinish, renderTracking, previewMessage, receivePreview } from './tracking.js';
+import { fillModelSelect } from './studio-model-choice.js';
 const mediaEpoch = await setupCleanup();
 const $ = id => document.getElementById(id);
 const videoLink = document.createElement('a');
@@ -112,6 +113,11 @@ $('editor').onsubmit = async event => {
   const seed = $('seed').value === '' ? crypto.getRandomValues(new Uint32Array(1))[0] : Number($('seed').value);
   const image = (source.subfolder ? source.subfolder + '/' : '') + (source.name || source.filename);
   graph['4'].inputs.image = image; graph['5'].inputs.megapixels = Number($('size').value); graph['6'].inputs.prompt = prompt;
+  const imageModel = ($('image-model-custom')?.value || '').trim() || $('image-model')?.value;
+  if (imageModel) {
+    graph['1'].inputs.unet_name = imageModel;
+    if (!imageModel.toLowerCase().endsWith('.gguf')) { graph['1'].class_type = 'UNETLoader'; graph['1'].inputs.weight_dtype = 'default'; }
+  }
   graph['11'].inputs.lora_name = `Qwen-Image-Edit-2511-Lightning-${steps === 40 ? 4 : steps}steps-V1.0-bf16.safetensors`;
   graph['11'].inputs.strength_model = steps === 40 ? 0 : 1;
   graph['14'].inputs.cfg = steps === 40 ? 4 : 1;
@@ -219,6 +225,7 @@ function connect() {
 async function init() {
   try {
     [template, workflow] = await Promise.all([request('/qwen-editor/quality.api.json'), request('/qwen-editor/quality.json')]);
+    await fillModelSelect($('image-model'), { request, lists: [{ node: 'UnetLoaderGGUF', field: 'unet_name' }, { node: 'UNETLoader', field: 'unet_name' }], slot: 'image', fallback: 'qwen-image-edit-2511-Q2_K.gguf', note: $('image-model-hint') });
     const info = await request('/object_info/LoraLoaderModelOnly');
     const loras = info.LoraLoaderModelOnly.input.required.lora_name[0].filter(name => !name.includes('Lightning-') && !/wan21|causvid/i.test(name));
     for (const name of loras) $('lora').add(new Option(name, name));

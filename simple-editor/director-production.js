@@ -1,4 +1,4 @@
-import {usesBoards} from './director-planning-state.js';
+import {usesBoards,planStill} from './director-planning-state.js';
 import {validateRevisions,revisionControls,mediaComparison,ANIMATION_PASSES} from './director-revisions.js';
 import {validateShotTitleOverlay, titleOverlayControls} from './director-title-styles.js';
 export {ANIMATION_PASSES};
@@ -78,10 +78,10 @@ export function animationPassGateMessages(shot){
  }
  return messages;
 }
-/** Attached finished clip, or every storyboard panel has media. */
+/** Attached finished clip, storyboard drawings, or a layout drawing / color frame held for the shot. */
 export function shotHasMedia(shot){
- if(usesBoards(shot))return !!(shot.panels?.length&&shot.panels.every(p=>p.media));
- return !!shot.media;
+ if(usesBoards(shot))return !!(shot.panels?.length&&shot.panels.every(p=>p.media||planStill(shot)));
+ return !!(shot.media||planStill(shot));
 }
 export function shotOpenNotesCount(shot){
  return [...(shot.versions||[]),...(shot.animationRevisions||[])].reduce((n,v)=>n+v.notes.filter(x=>!x.resolved).length,0);

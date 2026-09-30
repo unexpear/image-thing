@@ -37,7 +37,12 @@ export function validateProject(p){
 }
 export const newProject=()=>({version:1,id:crypto.randomUUID(),title:'Untitled cartoon',style:'',synopsis:'',assets:[],scenes:[{id:crypto.randomUUID(),title:'Scene 1',shots:[]}]});
 export const time=s=>`${Math.floor(s/3600).toString().padStart(2,'0')}:${Math.floor(s%3600/60).toString().padStart(2,'0')}:${Math.floor(s%60).toString().padStart(2,'0')}`;
-export function shotBrief(project,scene,shot){return [project.title,project.style,project.story?.premise,project.story?.worldRules,scene.title,scene.plan?.purpose,scene.plan?.goal,scene.plan?.turn,shot.title,shot.action,shot.camera,shot.dialogue?'Dialogue: '+shot.dialogue:'',...project.assets.filter(a=>['character','set','prop'].includes(a.kind)&&(shot.assetIds===undefined||shot.assetIds.includes(a.id))).map(a=>`${a.kind}: ${a.name}. ${a.brief||''}`)].filter(Boolean).join('\n');}
+export function styleSheetLines(project){
+ const guide=project?.story?.styleGuide;
+ if(!guide||typeof guide!=='object'||Array.isArray(guide))return '';
+ return [['Shapes',guide.shapes],['Line',guide.line],['Palette',guide.palette],['Light',guide.light],['Never',guide.never]].filter(([,value])=>value).map(([name,value])=>name+': '+value).join('\n');
+}
+export function shotBrief(project,scene,shot){const sheet=styleSheetLines(project);return [project.title,project.style,sheet?`Style sheet\n${sheet}`:'',project.story?.fiction==='dark'?'Dark fiction':'',project.story?.premise,project.story?.worldRules,scene.title,scene.plan?.purpose,scene.plan?.goal,scene.plan?.turn,shot.title,shot.action,shot.camera,shot.dialogue?'Dialogue: '+shot.dialogue:'',...project.assets.filter(a=>['character','set','prop'].includes(a.kind)&&(shot.assetIds===undefined||shot.assetIds.includes(a.id))).map(a=>`${a.kind}: ${a.name}. ${a.brief||''}${a.kind==='character'&&a.design?.shape?' Shape: '+a.design.shape:''}`)].filter(Boolean).join('\n');}
 
 /** Scene + shot index for a shot id, or null. */
 export function findShotLocation(project, shotId) {

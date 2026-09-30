@@ -1,6 +1,7 @@
 import {setupCleanup} from './cleanup.js';
 import {finishingOptions, finishGraph, renderFinishing} from './mesh-finishing.js';
 import {trackEvent, trackFinish, renderTracking} from './tracking.js';
+import {fillModelSelect} from './studio-model-choice.js';
 const epoch = await setupCleanup(), key = 'studio-mesh-v1' + epoch;
 const $ = id => document.getElementById(id);
 document.querySelector('.iteration-gallery').parentElement.hidden = true;
@@ -37,7 +38,7 @@ function render() {
 }
 export function buildGraph(images, options) {
   const graph = {
-    '1':{class_type:'ImageOnlyCheckpointLoader',inputs:{ckpt_name:checkpoint}},
+    '1':{class_type:'ImageOnlyCheckpointLoader',inputs:{ckpt_name:($('mesh-model-custom')?.value||'').trim()||$('mesh-model')?.value||checkpoint}},
     '2':{class_type:'ModelSamplingAuraFlow',inputs:{model:['1',0],shift:1}},
     '6':{class_type:'Hunyuan3Dv2ConditioningMultiView',inputs:{}},
     '7':{class_type:'FluxGuidance',inputs:{conditioning:['6',0],guidance:3.5}},
@@ -75,7 +76,7 @@ async function poll(){if(polling)return;polling=true;try{const queue=await api('
 }catch{online=false;$('connection').textContent='Reconnecting…';}finally{polling=false;changed();}}
 function connect(){const ws=new WebSocket(`${location.protocol==='https:'?'wss:':'ws:'}//${location.host}/ws?clientId=${client}`);ws.onclose=()=>setTimeout(connect,3000);ws.onerror=()=>ws.close();ws.onmessage=e=>{if(typeof e.data!=='string')return;const {type,data}=JSON.parse(e.data);const job=jobs.find(j=>j.id===data?.prompt_id);if(!job)return;
 if(type==='executing'&&data.node){job.stage=stages[data.node]||'Reading reference';delete job.step;}if(type==='progress'){job.state='running';job.step={value:data.value,max:data.max};job.stage=stages[data.node]||'Processing mesh';}if(type==='execution_error')finish(job,'error',data.exception_message);if(type==='execution_interrupted')finish(job,'cancelled');if(type==='execution_success')poll();trackEvent(job,type,data);changed();};}
-async function init(){try{const info=await api('/object_info');const required=['ImageOnlyCheckpointLoader','Hunyuan3Dv2ConditioningMultiView','DecimateMesh','MeshSmoothNormals','SaveGLB','UnwrapMesh','ApplyTextureToMesh','StudioMeshExportCheck','StudioMeshStyle'];ready=required.every(name=>info[name])&&info.ImageOnlyCheckpointLoader.input.required.ckpt_name[0].includes(checkpoint);$('setup-status').textContent=ready?'Local model installed · GPU shared with images and video':'3D setup incomplete. Model or required nodes are missing.';}catch(e){error(e.message);}connect();await poll();}
+async function init(){try{const info=await api('/object_info');const required=['ImageOnlyCheckpointLoader','Hunyuan3Dv2ConditioningMultiView','DecimateMesh','MeshSmoothNormals','SaveGLB','UnwrapMesh','ApplyTextureToMesh','StudioMeshExportCheck','StudioMeshStyle'];ready=required.every(name=>info[name])&&info.ImageOnlyCheckpointLoader.input.required.ckpt_name[0].includes(checkpoint);$('setup-status').textContent=ready?'Local model installed · GPU shared with images and video':'3D setup incomplete. Model or required nodes are missing.';if($('mesh-model'))await fillModelSelect($('mesh-model'),{request:api,lists:[{node:'ImageOnlyCheckpointLoader',field:'ckpt_name'}],slot:'mesh',fallback:checkpoint,note:$('mesh-model-hint')});}catch(e){error(e.message);}connect();await poll();}
 setInterval(poll,3000);setInterval(render,1000);init();
 
 // Managed Blender processing via the studio_jobs backend (all server

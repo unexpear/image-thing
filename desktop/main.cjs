@@ -12,7 +12,46 @@ app.setName('Local Studio');app.setAppUserModelId('LocalStudio.Desktop');
 let win,connecting=false,closing=false;
 const local=url=>{try{return new URL(url).origin===base;}catch{return false;}};
 async function ready(){try{const r=await fetch(base+'/system_stats',{signal:AbortSignal.timeout(2000)});const body=await r.json();return r.ok&&!!body.system;}catch{return false;}}
-function backendAlive(){try{const pid=Number(fs.readFileSync(path.join(root,'logs','server.pid'),'utf8').trim());if(!Number.isSafeInteger(pid)||pid<1)return false;process.kill(pid,0);return true;}catch{return false;}}
+function deployEditor(){
+ const script=path.join(root,'Deploy-Editor.ps1');
+ if(!fs.existsSync(script))return Promise.reject(Error('Deploy-Editor.ps1 was not found in this Studio workspace.'));
+ const powershell=path.join(process.env.SystemRoot||'C:\\Windows','System32','WindowsPowerShell','v1.0','powershell.exe');
+ return new Promise((resolve,reject)=>{
+  const child=spawn(powershell,['-NoProfile','-ExecutionPolicy','Bypass','-File',script],{cwd:root,windowsHide:true});
+  let err='';
+  child.stderr.on('data',chunk=>{err+=chunk;});
+  child.on('error',reject);
+  child.on('close',code=>{if(code===0)resolve();else reject(Error('The studio files could not be prepared. '+(err.trim()||('exit '+code))));});
+ });
+}
+function firstExisting(paths){return paths.find(item=>item&&fs.existsSync(item))||'';}
+function modelServers(){
+ return [
+  {name:'Ollama',url:'http://127.0.0.1:11434/api/tags',log:'ollama',exe:firstExisting([path.join(process.env.LOCALAPPDATA||'','Programs','Ollama','ollama.exe'),path.join(process.env.ProgramFiles||'','Ollama','ollama.exe')]),args:['serve'],env:{OLLAMA_HOST:'127.0.0.1:11434',OLLAMA_NO_CLOUD:'1',OLLAMA_NOPRUNE:'1'}},
+  {name:'LM Studio',url:'http://127.0.0.1:1234/v1/models',log:'lmstudio',exe:firstExisting([path.join(process.env.USERPROFILE||'','.lmstudio','bin','lms.exe')]),args:['server','start','--port','1234','--bind','127.0.0.1'],env:{}}
+ ];
+}
+async function modelServerUp(url){try{const response=await fetch(url,{signal:AbortSignal.timeout(2000)});return response.ok;}catch{return false;}}
+function startModelServer(spec){
+ const logs=path.join(root,'logs');fs.mkdirSync(logs,{recursive:true});
+ const out=fs.openSync(path.join(logs,spec.log+'.stdout.log'),'a'),err=fs.openSync(path.join(logs,spec.log+'.stderr.log'),'a');
+ try{const child=spawn(spec.exe,spec.args,{detached:true,windowsHide:true,stdio:['ignore',out,err],env:{...process.env,...spec.env}});child.unref();return true;}finally{fs.closeSync(out);fs.closeSync(err);}
+}
+async function prepareModelServers(){
+ const pending=[];
+ for(const spec of modelServers()){
+  if(await modelServerUp(spec.url))continue;
+  if(!spec.exe)continue;
+  try{if(startModelServer(spec))pending.push(spec);}catch{pending.push(spec);}
+ }
+ const deadline=Date.now()+(smoke?20000:120000);
+ while(pending.length&&Date.now()<deadline){
+  if(closing)return [];
+  await new Promise(resolve=>setTimeout(resolve,1500));
+  for(let index=pending.length-1;index>=0;index-=1)if(await modelServerUp(pending[index].url))pending.splice(index,1);
+ }
+ return pending.map(spec=>spec.name);
+}
 function startBackend(){
  const cwd=path.join(root,'ComfyUI_windows_portable'),python=path.join(cwd,'python_embeded','python.exe');
  if(!fs.existsSync(python))throw Error('ComfyUI was not found in this Studio workspace.');
@@ -21,18 +60,22 @@ function startBackend(){
  try{const child=spawn(python,['-s','ComfyUI/main.py','--windows-standalone-build','--disable-auto-launch','--listen','127.0.0.1','--reserve-vram','1','--disable-smart-memory'],{cwd,detached:true,windowsHide:true,stdio:['ignore',out,err]});child.on('error',e=>{if(!closing)dialog.showErrorBox('Backend could not start',e.message);});if(child.pid)fs.writeFileSync(path.join(logs,'server.pid'),String(child.pid));child.unref();}finally{fs.closeSync(out);fs.closeSync(err);}
 }
 async function connect(){
- if(connecting||!win||win.isDestroyed())return;connecting=true;
+ if(connecting||!win||win.isDestroyed())return; connecting=true;
  try{
+  await win.loadFile(path.join(__dirname,'starting.html'));
+  await deployEditor();
+  const modelServersReady=prepareModelServers();
   if(!await ready()){
-   await win.loadFile(path.join(__dirname,'starting.html'));
    if(!backendAlive())startBackend();
    const deadline=Date.now()+240000;
    while(!await ready()){
     if(closing)return;
-    if(Date.now()>deadline)throw Error('ComfyUI is taking longer than expected. Open the backend log from the Help menu, then use Reconnect.');
+    if(Date.now()>deadline)throw Error('ComfyUI is taking longer than expected. Open the backend log from the Help menu, then use Prepare studio and reconnect.');
     await new Promise(resolve=>setTimeout(resolve,1500));
    }
   }
+  const slow=await modelServersReady;
+  if(slow.length&&!closing&&!smoke)dialog.showMessageBox(win,{type:'warning',title:'Local models',message:slow.join(' and ')+' did not answer yet.',detail:'Cartoon Director is open. Writing can use an installed model. Ollama or LM Studio will work after that program answers on this computer.'});
   if(!closing)await win.loadURL(base+'/qwen-editor/director.html');
  }catch(e){if(!closing){if(smoke)fs.writeFileSync(path.join(root,'reports','studio','desktop-smoke.json'),JSON.stringify({ok:false,error:e.message}));else dialog.showErrorBox('Studio connection',e.message);}}
  finally{connecting=false;}
@@ -75,7 +118,7 @@ if(!app.requestSingleInstanceLock()){app.quit();}else{
    {label:'Studio',submenu:[{label:'Cartoon Director',accelerator:'CmdOrCtrl+1',click:()=>navigate('/qwen-editor/director.html')},{label:'Images',accelerator:'CmdOrCtrl+2',click:()=>navigate('/qwen-editor.html')},{label:'Video',accelerator:'CmdOrCtrl+3',click:()=>navigate('/qwen-editor/video.html')},{label:'3D',accelerator:'CmdOrCtrl+4',click:()=>navigate('/qwen-editor/mesh.html')},{type:'separator'},{label:'Open output folder',click:()=>shell.openPath(path.join(root,'ComfyUI_windows_portable','ComfyUI','output'))},{type:'separator'},{role:'quit'}]},
    {role:'editMenu'},
    {label:'View',submenu:[{role:'reload'},{role:'resetZoom'},{role:'zoomIn'},{role:'zoomOut'},{role:'togglefullscreen'}]},
-   {label:'Help',submenu:[{label:'Reconnect to ComfyUI',click:connect},{label:'Verify model files…',click:verifyModels},{label:'Open backend log',click:()=>shell.openPath(path.join(root,'logs','comfy.stderr.log'))},{label:'Desktop project storage',click:()=>dialog.showMessageBox(win,{type:'info',title:'Your local projects',message:'Media is shared with your existing Studio.',detail:'This desktop app keeps its own persistent project profile. To move an existing browser episode, use Download project in the browser and Import project here. Closing this window leaves ComfyUI running so jobs can finish.'})}]}
+   {label:'Help',submenu:[{label:'Prepare studio and reconnect',click:connect},{label:'Verify model files…',click:verifyModels},{label:'Open backend log',click:()=>shell.openPath(path.join(root,'logs','comfy.stderr.log'))},{label:'Desktop project storage',click:()=>dialog.showMessageBox(win,{type:'info',title:'Your local projects',message:'Media is shared with your existing Studio.',detail:'Episodes saved in this window are also written to the shared project list on this computer, so a browser on this machine can show them after it reloads. A project already in this list keeps this copy. Media stays in the Studio folders. Closing this window leaves the engine, Ollama, and LM Studio running.'})}]}
   ]));
   await connect();
   if(smoke){

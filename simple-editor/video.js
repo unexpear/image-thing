@@ -1,5 +1,6 @@
 import { setupCleanup, applyDirectorBrief } from './cleanup.js';
 import { trackEvent, trackFinish, renderTracking, previewMessage, receivePreview } from './tracking.js';
+import { fillModelSelect } from './studio-model-choice.js';
 const mediaEpoch = await setupCleanup();
 const $ = id => document.getElementById(id), key = 'studio-video-v1' + mediaEpoch;
 let jobs = []; try { jobs = JSON.parse(localStorage.getItem(key) || '[]'); } catch {}
@@ -233,6 +234,7 @@ $('video-form').onsubmit = async e => {
   const prompt = $('description').value.trim();
   if (!prompt) { sending = false; buttons(); return error('Describe the video you want.'); }
   graph['6'].inputs.text = prompt; Object.assign(graph['9'].inputs, { width, height, length: frames }); graph['14'].inputs.seed = seed;
+  if ((($('video-model-custom')?.value || '').trim() || $('video-model')?.value)) graph['1'].inputs.unet_name = ($('video-model-custom').value || '').trim() || $('video-model').value;
   const name = (input.subfolder ? input.subfolder + '/' : '') + input.name;
   if (which === 'animate') { graph['4'].inputs.image = name; Object.assign(graph['5'].inputs, { width, height }); }
   else { Object.assign(graph['4'].inputs, { file: name, width, height, frames, start_seconds: Number($('start').value) }); graph['9'].inputs.strength = Number($('control-strength').value); if ($('guidance').value === 'source') { graph['9'].inputs.control_video = ['4', 0]; delete graph['5']; } }
@@ -306,6 +308,7 @@ async function init() {
     [templates.animate, templates.restyle] = await Promise.all(['animate', 'restyle'].map(m => api(`/qwen-editor/${m}.api.json`)));
     const checks = [['UNETLoader', 'unet_name', templates.animate['1'].inputs.unet_name], ['CLIPLoader', 'clip_name', templates.animate['2'].inputs.clip_name], ['VAELoader', 'vae_name', templates.animate['3'].inputs.vae_name], ['LoraLoaderModelOnly', 'lora_name', templates.animate['11'].inputs.lora_name]];
     for (const [type, field, file] of checks) { const info = await api('/object_info/' + type); if (!info[type].input.required[field][0].includes(file)) throw new Error('Missing model: ' + file); }
+    await fillModelSelect($('video-model'), { request: api, lists: [{ node: 'UNETLoader', field: 'unet_name' }], slot: 'video', fallback: 'wan2.1_vace_1.3B_fp16.safetensors', note: $('video-model-hint') });
     const info = await api('/object_info/StudioVideoInput'); if (!info.StudioVideoInput) throw new Error('Restart ComfyUI to load the video decoder.');
     ready = true; $('availability').textContent = 'Models ready · processed on this computer';
     const h = await api('/history?max_items=30');

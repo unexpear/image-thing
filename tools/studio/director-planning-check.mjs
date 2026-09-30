@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {dirname, join} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {newProject,validateProject} from '../../simple-editor/director-project.js';
-import {planningBasis,planningIssues,removeBeat,removeBeatConfirmMessage,clearAllBeats,clearAllBeatsConfirmMessage,storyBeatCount,removePanelConfirmMessage,removeAudioTrackConfirmMessage,reorderBeatOptions,destIndexFromBeatPlace,moveBeat,reorderPanelOptions,destIndexFromPanelPlace,movePanel,ensureAudioTrackIds,reorderAudioTrackOptions,destIndexFromAudioTrackPlace,moveAudioTrack,fitPanels,boardFrames,panelAt,assemblyShots,planningDocument,setShotSeconds,addPanel,setPanelFrames,sceneHasPlan,listScenePlanSources,copyScenePlan,STORY_FIELDS} from '../../simple-editor/director-planning-state.js';
+import {newProject,validateProject,shotBrief} from '../../simple-editor/director-project.js';
+import {planningBasis,planningIssues,removeBeat,removeBeatConfirmMessage,clearAllBeats,clearAllBeatsConfirmMessage,storyBeatCount,removePanelConfirmMessage,removeAudioTrackConfirmMessage,reorderBeatOptions,destIndexFromBeatPlace,moveBeat,reorderPanelOptions,destIndexFromPanelPlace,movePanel,ensureAudioTrackIds,reorderAudioTrackOptions,destIndexFromAudioTrackPlace,moveAudioTrack,fitPanels,boardFrames,panelAt,assemblyShots,planningDocument,setShotSeconds,addPanel,setPanelFrames,sceneHasPlan,listScenePlanSources,copyScenePlan,STORY_FIELDS,planStill,planStillLabel,animaticPictureLabel,animaticPlanStatus,creationContinuityIssues,isCreationContinuityProp} from '../../simple-editor/director-planning-state.js';
 import {deliveryChecks} from '../../simple-editor/director-delivery.js';
+import {parsePrototypeDraft,applyPrototypeDraft,outlineFromManuscript,cutPrototypeRow,restoreDarling,parseScreenplay,feedScreenplay} from '../../simple-editor/director-prototype.js';
 const root = join(dirname(fileURLToPath(import.meta.url)), '../..');
 const p=newProject(),scene=p.scenes[0],shot={id:'shot',title:'Reaction',seconds:3,action:'Notice then react'};scene.shots.push(shot);
 assert.equal(validateProject(p),p);assert.deepEqual(assemblyShots(p),[shot]);
@@ -28,6 +29,17 @@ setPanelFrames(timed,0,10);assert.equal(timed.panels[0].frames,10);assert.equal(
 assert.ok(!deliveryChecks(p).some(x=>x.kind==='Assembly'));
 shot.audio={name:'voice.wav'};shot.audioTracks=[{kind:'effects',start:1,volume:.4,media:{name:'effect.wav'},notes:'Footstep'}];
 const parts=assemblyShots(p);assert.equal(parts.length,2);assert.equal(parts[1].audioOffset,parts[0].seconds);assert.equal(parts.reduce((n,x)=>n+x.frames,0),72);assert.deepEqual(parts[1].audio,shot.audio);
+const held=newProject();
+held.scenes[0].shots.push({id:'hold',title:'Plan',seconds:4,layout:{drawing:{name:'layout.png',type:'input'}}});
+const heldShot=assemblyShots(held)[0];
+assert.equal(heldShot.media.name,'layout.png');
+assert.equal(heldShot.seconds,4);
+held.scenes[0].shots[0].media={name:'take.webm',type:'output'};
+assert.equal(assemblyShots(held)[0].media.name,'take.webm');
+const boarded={...held.scenes[0].shots[0],visualSource:'boards',panels:[{id:'p',frames:96}]};
+held.scenes[0].shots[0]=boarded;
+assert.equal(assemblyShots(held)[0].media.name,'layout.png');
+assert.equal(deliveryChecks(held).some(item=>item.kind==='Assembly'&&/layout drawing/.test(item.message)),false);
 assert.deepEqual(validateProject(JSON.parse(JSON.stringify(p))),p);assert.match(planningDocument(p),/Change a decision/);
 shot.panels[0].frames=NaN;assert.throws(()=>validateProject(p));shot.panels[0].frames=24;
 shot.audioTracks[0].volume=Infinity;assert.throws(()=>validateProject(p));shot.audioTracks[0].volume=.4;
@@ -188,9 +200,9 @@ assert.match(planningPanelUi,/Panel earlier/);
 assert.match(planningPanelUi,/Panel later/);
 assert.match(planningPanelUi,/Place panel in storyboard/);
 assert.match(planningPanelUi,/dataset\.panelId=p\.id/);
-assert.match(planningPanelUi,/attach,tell/);
+assert.match(planningPanelUi,/attach,upload,tell/);
 const directorPanelUi=readFileSync(join(root,'simple-editor/director.js'),'utf8');
-assert.match(directorPanelUi,/shotPlanning\(card,current,scene,shot,\{field,button,change,attach,tell\}\)/);
+assert.match(directorPanelUi,/shotPlanning\(card,current,scene,shot,\{field,button,change,attach,upload,tell\}\)/);
 const cssPanelUi=readFileSync(join(root,'simple-editor/director.css'),'utf8');
 assert.match(cssPanelUi,/\.board-card \.panel-reorder\{/);
 
@@ -352,6 +364,108 @@ const msSrc=readFileSync(join(root,'simple-editor/director-manuscript.js'),'utf8
 assert.match(msSrc, /Copyright \(c\) 2026 Hugh Howey/);
 assert.match(msSrc, /NOTICE-NEO/);
 console.log('Manuscript: parse *** / # Title, feed append, word count, validate cap, UI + NOTICE.');
+{
+ const draft=parsePrototypeDraft('part Opening\n0 6 shot Notices the cup\n6 3 event Child in the door\nCHARACTER Adult\nview front Empty face\noutfit everyday Plain\nhair none');
+ assert.equal(draft.events[0].part,'Opening');
+ assert.equal(draft.events[1].kind,'event');
+ assert.equal(draft.characters[0].views[0].name,'front');
+ const protoProj=newProject();
+ protoProj.assets.push({id:'adult',kind:'character',name:'Adult'});
+ protoProj.story={beats:[],manuscript:'# Notices\nThe cup appears.\n***\n# Disruption\nA child enters.'};
+ assert.equal(outlineFromManuscript(protoProj),2);
+ assert.equal(protoProj.story.prototype.events[1].start,6);
+ cutPrototypeRow(protoProj,0);
+ assert.equal(protoProj.story.prototype.events.length,1);
+ assert.equal(protoProj.story.prototype.darlings[0].title,'Notices');
+ restoreDarling(protoProj,protoProj.story.prototype.darlings[0].id);
+ assert.equal(protoProj.story.prototype.events.length,2);
+ assert.equal(protoProj.story.prototype.darlings.length,0);
+ const before=protoProj.scenes.length;
+ applyPrototypeDraft(protoProj,'0 4 shot Looks again\nCHARACTER Adult\nview side Same silhouette');
+ assert.equal(protoProj.scenes.length,before);
+ assert.equal(protoProj.assets[0].design.views[0].name,'side');
+ assert.throws(()=>applyPrototypeDraft(protoProj,'CHARACTER Missing\nview front x'),/Missing/);
+ assert.equal(validateProject(JSON.parse(JSON.stringify(protoProj))).story.prototype.events.length,1);
+ const ui=readFileSync(join(root,'simple-editor/director-planning.js'),'utf8');
+ assert.ok(ui.includes('Outline from manuscript')&&ui.includes('Cut prototype row')&&ui.includes('Start character sheet'));
+ console.log('Prototype: NEO outline from manuscript, cut-and-restore, character sheet, assistant draft.');
+}
+{
+ const pages=parseScreenplay('INT. ROOM - DAY\nThe adult sees the cup.\n\nADULT\n(no words)\n');
+ assert.equal(pages.length,1);
+ assert.match(pages[0].action,/sees the cup/);
+ assert.match(pages[0].dialogue,/no words/);
+ const play=newProject();
+ play.story={beats:[],screenplay:'INT. ROOM - DAY\nThe adult sees the cup.\n\nADULT\n(no words)'};
+ assert.equal(feedScreenplay(play,play.story.screenplay),1);
+ const fed=play.scenes.at(-1).shots[0];
+ assert.match(fed.dialogue,/no words/);
+ fed.reelWatched=true;
+ fed.colorScript={light:'one window',palette:'grey and one red cup',mood:'quiet',frame:{name:'color.png',type:'input'}};
+ fed.layout={camera:'wide on the doorway',direction:'screen-left',contacts:'both feet',movement:'none yet',drawing:{name:'layout.png',type:'input'}};
+ play.assets.push({id:'who',kind:'character',name:'Adult',design:{height:1,scaleNote:'Fills the doorway',views:[{id:'v',name:'front',note:'',drawing:{name:'front.png',type:'input'}}],outfits:[],hair:[]}});
+ assert.equal(validateProject(JSON.parse(JSON.stringify(play))).scenes.at(-1).shots[0].reelWatched,true);
+ fed.layout.direction='up';
+ assert.throws(()=>validateProject(play),/Screen direction/);
+ const planUi=readFileSync(join(root,'simple-editor/director-planning.js'),'utf8');
+ assert.equal(planStillLabel({layout:{drawing:{name:'layout.png'}},colorScript:{frame:{name:'color.png'}}}),'Layout drawing');
+ assert.equal(planStill({colorScript:{frame:{name:'color.png'}}})?.name,'color.png');
+ assert.equal(planStill({colorScript:{frame:{name:'clip.mp4'}}}),null);
+ const layout={name:'layout.png'},color={name:'color.png'},bare={seconds:8};
+ assert.equal(animaticPictureLabel({...bare,layout:{drawing:layout},colorScript:{frame:color}}),'Layout drawing');
+ assert.equal(animaticPictureLabel({...bare,colorScript:{frame:color}}),'Color frame');
+ assert.equal(animaticPictureLabel({...bare,media:{name:'take.webm'},layout:{drawing:layout}}),'Recorded clip');
+ const emptyPanel={id:'a',frames:192};
+ assert.equal(animaticPictureLabel({...bare,visualSource:'boards',panels:[emptyPanel],layout:{drawing:layout}},emptyPanel),'Layout drawing');
+ const drawn={id:'b',frames:192,media:{name:'panel.png'}};
+ assert.equal(animaticPictureLabel({...bare,visualSource:'boards',panels:[drawn],layout:{drawing:layout}},drawn),'Storyboard panel 1');
+ assert.match(animaticPlanStatus('Layout drawing'),/plan still/);
+ assert.match(animaticPlanStatus('Color frame'),/Not the acted performance/);
+ const animatic=readFileSync(join(root,'simple-editor/director-animatic.js'),'utf8');
+ assert.ok(animatic.includes('animaticPictureLabel(entry.shot,board)')&&animatic.includes('animaticPlanStatus(stillLabel)'));
+ const look=newProject();
+ look.story={beats:[],fiction:'dark',styleGuide:{shapes:'rounds',line:'closed',palette:'cream and one red',light:'one window',never:'a new color'}};
+ look.assets.push({id:'who',kind:'character',name:'Adult',brief:'No memory',design:{shape:'round block',views:[],outfits:[],hair:[]}});
+ look.scenes[0].shots.push({id:'s',title:'Cup',seconds:6,action:'Sees the cup',camera:'wide'});
+ const brief=shotBrief(look,look.scenes[0],look.scenes[0].shots[0]);
+ assert.match(brief,/cream and one red/);
+ assert.match(brief,/round block/);
+ assert.match(brief,/Dark fiction/);
+ assert.equal(validateProject(JSON.parse(JSON.stringify(look))).story.fiction,'dark');
+ look.story.fiction='graphic';
+ assert.throws(()=>validateProject(look),/dark fiction/);
+ look.story.fiction='dark';
+ look.story.styleGuide.never='x'.repeat(401);
+ assert.throws(()=>validateProject(look),/Style sheet/);
+ assert.ok(planUi.includes('Dark fiction')&&planUi.includes('Use film palette')&&planUi.includes('Silhouette shape'));
+ console.log('Pre-production: screenplay, reel mark, painted color frame, painted layout, size chart, design drawing.');
+}
 
 console.log('Planning checks passed: legacy compatibility, dependency and revision reminders, beat unlinking, exact frame boundaries, panel export/audio offsets, round trip, copy scene plan, jump-to-shot wiring, story-beat Place/Reorder, storyboard panel Place/Reorder, sound-track Place/Reorder, destructive Remove confirms (beat/panel/track), Clear all beats confirm, manuscript feed, and invalid import rejection.');
+
+// Creation continuity: earlier creations must stay on later shots that author props
+{
+ assert.equal(isCreationContinuityProp({name:'Favorite creation — ring'}),true);
+ assert.equal(isCreationContinuityProp({name:'Creation gun — floor stub'}),false);
+ assert.equal(isCreationContinuityProp({name:'First creation — ball',firstFrame:24}),true);
+ assert.equal(isCreationContinuityProp({name:'Set — armchair seat'}),false);
+ const cont=newProject();
+ const sc=cont.scenes[0];
+ sc.shots=[{
+  id:'early',title:'Favorites',seconds:5,
+  rig3d:{props:[{id:'ball',name:'First creation — ball'},{id:'ring',name:'Favorite creation — ring'},{id:'chair',name:'Set — armchair'}]}
+ },{
+  id:'late',title:'Child',seconds:5,
+  rig3d:{props:[{id:'ball',name:'First creation — ball'},{id:'chair',name:'Set — armchair'}]}
+ }];
+ const missing=creationContinuityIssues(cont);
+ assert.ok(missing.some(x=>x.shotId==='late'&&/Favorite creation — ring/.test(x.message)));
+ assert.ok(planningIssues(cont).some(x=>/earlier creations should stay/.test(x.message)));
+ sc.shots[1].rig3d.props.push({id:'ring',name:'Favorite creation — ring'});
+ assert.equal(creationContinuityIssues(cont).length,0);
+ const livePath=join(root,'studio-data/director-projects/a9407dddd356503d6c601377a33846388d5f6dfb74ebbfe068d0c8b4bcb3a1e4/latest.json');
+ const live=JSON.parse(readFileSync(livePath,'utf8'));
+ assert.equal(creationContinuityIssues(live).length,0);
+ console.log('Creation continuity: missing favorite flagged; Blank Slate story production test passes.');
+}
 

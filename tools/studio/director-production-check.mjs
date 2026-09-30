@@ -66,6 +66,7 @@ assert.ok(PRODUCTION_STATUS_FILTERS.some(f=>f.id==='open-notes'));
 assert.equal(shotHasMedia(shot),true);
 assert.equal(shotMatchesProductionStatusFilter(shot,'missing-media'),false);
 const noMedia={id:'nm',seconds:2};assert.equal(shotHasMedia(noMedia),false);assert.ok(shotMatchesProductionStatusFilter(noMedia,'missing-media'));
+assert.equal(shotHasMedia({id:'plan',seconds:2,layout:{drawing:{name:'layout.png'}}}),true);
 shot.versions[0].notes[0].resolved=false;
 assert.ok(shotHasOpenNotes(shot));
 assert.ok(shotMatchesProductionStatusFilter(shot,'open-notes'));

@@ -1,5 +1,6 @@
 import {validateBeatMarkers} from './director-beat-markers.js';
 import {validateManuscript} from './director-manuscript.js';
+import {validatePrototype,validatePreproduction} from './director-prototype.js';
 export const STORY_FIELDS=['premise','audience','theme','worldRules','ending'];
 export const SCENE_FIELDS=['purpose','goal','obstacle','turn','outcome','script'];
 export const ARC_FIELDS=['want','need','flaw','change'];
@@ -7,6 +8,29 @@ export const ASSET_STATES=['Not started','In progress','Approved'];
 export const TOOL_STAGES=['plan','camera','body','face','draw','review'];
 export const boardFrames=shot=>(shot.panels||[]).reduce((n,p)=>n+p.frames,0);
 export const usesBoards=shot=>shot.visualSource==='boards';
+export function planStill(shot){
+ const image=file=>file&&/\.(png|jpe?g|webp)$/i.test(file.name||file.filename||'')?file:null;
+ return image(shot?.layout?.drawing)||image(shot?.colorScript?.frame)||null;
+}
+export function planStillLabel(shot){
+ const still=planStill(shot);
+ if(!still)return '';
+ return still===(shot.layout?.drawing||null)?'Layout drawing':'Color frame';
+}
+export function animaticPictureLabel(shot,board){
+ const plan=planStillLabel(shot);
+ if(usesBoards(shot)){
+  if(!board)return `Past the storyboard · ${boardFrames(shot)}/${shot.seconds*24} frames`;
+  if(board.media)return `Storyboard panel ${(shot.panels||[]).indexOf(board)+1}`;
+  if(plan)return plan;
+  return `Storyboard panel ${(shot.panels||[]).indexOf(board)+1}`;
+ }
+ if(shot?.media)return 'Recorded clip';
+ return plan||'Planned shot · no picture yet';
+}
+export function animaticPlanStatus(label){
+ return label+' · plan still, held for this shot’s length. Not the acted performance.';
+}
 export const shotFrames=shot=>shot.seconds*24;
 export function panelAt(shot,seconds){
  let end=0;const panels=shot.panels||[];
@@ -67,8 +91,43 @@ export function duplicatePanel(shot,index){
 export function planningBasis(project,scene,shot){
  const assets=project.assets.filter(a=>shot.assetIds===undefined||shot.assetIds.includes(a.id));
  const beats=(project.story?.beats||[]).filter(b=>(scene.plan?.beatIds||[]).includes(b.id));
- return JSON.stringify({style:project.style,synopsis:project.synopsis,story:STORY_FIELDS.map(k=>project.story?.[k]||''),beats,scene:scene.plan||{},shot:[shot.action,shot.camera,shot.dialogue,shot.seconds,shot.visualSource,shot.panels,shot.audioTracks,shot.audio,shot.audioRole],assets:assets.map(a=>[a.id,a.name,a.kind,a.brief,a.file,a.arc])});
+ return JSON.stringify({style:project.style,synopsis:project.synopsis,story:STORY_FIELDS.map(k=>project.story?.[k]||''),styleGuide:project.story?.styleGuide||null,fiction:project.story?.fiction||'',beats,scene:scene.plan||{},shot:[shot.action,shot.camera,shot.dialogue,shot.seconds,shot.visualSource,shot.panels,shot.audioTracks,shot.audio,shot.audioRole],assets:assets.map(a=>[a.id,a.name,a.kind,a.brief,a.file,a.arc,a.design?.shape||''])});
 }
+/** Prop looks like a spawned creation that should persist across later shots. */
+export function isCreationContinuityProp(prop){
+ if(!prop||typeof prop!=='object')return false;
+ const name=String(prop.name||'');
+ // Match "First/Second/Favorite creation — …"; do not treat the creation gun itself as a creation.
+ if(/^(first|second|favorite)\s+creation\b/i.test(name))return true;
+ if(prop.firstFrame!=null&&Number.isFinite(Number(prop.firstFrame)))return true;
+ return false;
+}
+
+/**
+ * Once a creation (or creation gun) appears in a shot, later shots in the same scene
+ * that author rig3d.props must still include it — earlier creations stay.
+ */
+export function creationContinuityIssues(project){
+ const issues=[];
+ for(const scene of project?.scenes||[]){
+  const established=new Map();
+  for(const shot of scene.shots||[]){
+   const props=shot?.rig3d?.props;
+   if(!Array.isArray(props))continue;
+   for(const [id,name] of established){
+    if(!props.some(p=>p&&p.id===id)){
+     issues.push({shotId:shot.id,message:`Continuity: “${name}” is missing — earlier creations should stay.`});
+    }
+   }
+   for(const prop of props){
+    if(!prop?.id||!isCreationContinuityProp(prop))continue;
+    if(!established.has(prop.id))established.set(prop.id,prop.name||prop.id);
+   }
+  }
+ }
+ return issues;
+}
+
 export function planningIssues(project){
  const issues=[],beats=project.story?.beats||[];
  for(const beat of beats){
@@ -88,6 +147,7 @@ export function planningIssues(project){
    }
   }
  }
+ issues.push(...creationContinuityIssues(project));
  return issues;
 }
 
@@ -511,10 +571,11 @@ export function fitPanels(shot){
 }
 export function assemblyShots(project){
  return project.scenes.flatMap(scene=>scene.shots.flatMap(shot=>{
-  if(!usesBoards(shot))return [shot];
-  if(!shot.panels?.length||boardFrames(shot)!==shot.seconds*24||shot.panels.some(p=>!p.media))throw Error(`Finish storyboard attachments and timing for “${shot.title}” before export.`);
+  const still=planStill(shot);
+  if(!usesBoards(shot))return [shot.media||!still?shot:{...shot,media:still}];
+  if(!shot.panels?.length||boardFrames(shot)!==shot.seconds*24||shot.panels.some(p=>!p.media&&!still))throw Error(`Finish storyboard attachments and timing for “${shot.title}” before export.`);
   let frame=0;
-  return shot.panels.map((panel,panelIndex,panels)=>{const part={...shot,media:panel.media,seconds:panel.frames/24,frames:panel.frames,audioOffset:frame/24};frame+=panel.frames;if(panelIndex!==panels.length-1)delete part.transition;else if(part.transition&&part.transition.type&&part.transition.type!=='cut'&&part.transition.durationSec>=part.seconds)throw Error('Transition is longer than the last storyboard panel of "'+shot.title+'". Shorten the transition or refit panels.');return part;});
+  return shot.panels.map((panel,panelIndex,panels)=>{const part={...shot,media:panel.media||still,seconds:panel.frames/24,frames:panel.frames,audioOffset:frame/24};frame+=panel.frames;if(panelIndex!==panels.length-1)delete part.transition;else if(part.transition&&part.transition.type&&part.transition.type!=='cut'&&part.transition.durationSec>=part.seconds)throw Error('Transition is longer than the last storyboard panel of "'+shot.title+'". Shorten the transition or refit panels.');return part;});
  }));
 }
 export function validatePlanning(project){
@@ -525,7 +586,8 @@ export function validatePlanning(project){
  const id=o=>{record(o);if(typeof o.id!=='string'||!o.id||ids.has(o.id))throw Error('Planning items need unique IDs.');ids.add(o.id);};
  const media=m=>{record(m);if(typeof(m.name||m.filename)!=='string'||!['input','output'].includes(m.type||'input'))throw Error('Choose a local media file.');};
  let beats=[];
- if(project.story!==undefined){record(project.story);text(project.story,STORY_FIELDS);validateManuscript(project.story);beats=project.story.beats||[];list(beats,500);for(const b of beats){id(b);text(b,['title','act','summary','setupId']);}for(const b of beats)if(b.setupId&&(!beats.some(x=>x.id===b.setupId)||b.setupId===b.id))throw Error('Choose another existing beat as the setup.');}
+ if(project.story!==undefined){record(project.story);text(project.story,STORY_FIELDS);validateManuscript(project.story);beats=project.story.beats||[];list(beats,500);for(const b of beats){id(b);text(b,['title','act','summary','setupId']);}for(const b of beats)if(b.setupId&&(!beats.some(x=>x.id===b.setupId)||b.setupId===b.id))throw Error('Choose another existing beat as the setup.');validatePrototype(project);}
+ validatePreproduction(project);
  for(const a of project.assets){if(a.arc!==undefined){record(a.arc);text(a.arc,ARC_FIELDS);}if(a.readiness!==undefined&&!ASSET_STATES.includes(a.readiness))throw Error('Invalid asset readiness.');}
  for(const scene of project.scenes){
   if(scene.plan!==undefined){record(scene.plan);text(scene.plan,SCENE_FIELDS);if(scene.plan.beatIds!==undefined){list(scene.plan.beatIds,500);if(new Set(scene.plan.beatIds).size!==scene.plan.beatIds.length||scene.plan.beatIds.some(id=>!beats.some(b=>b.id===id)))throw Error('Scene links must refer to existing story beats.');}}
@@ -540,7 +602,8 @@ export function validatePlanning(project){
  }
 }
 export function planningDocument(project){
- const lines=[project.title,'STORY ROOM',...STORY_FIELDS.map(k=>`${k}: ${project.story?.[k]||''}`),'BEATS'];
+ const guide=project.story?.styleGuide||{},sheet=['shapes','line','palette','light','never'].filter(key=>guide[key]).map(key=>key+': '+guide[key]);
+ const lines=[project.title,'STORY ROOM',...STORY_FIELDS.map(k=>`${k}: ${project.story?.[k]||''}`),project.story?.fiction==='dark'?'Fiction: dark':'',sheet.length?'STYLE SHEET\n'+sheet.join('\n'):'','BEATS'].filter(line=>line!=='');
  for(const b of project.story?.beats||[])lines.push(`${b.act||''} · ${b.title}\n${b.summary||''}${b.setupId?'\nPays off: '+project.story.beats.find(x=>x.id===b.setupId)?.title:''}`);
  for(const a of project.assets)lines.push(`ASSET: ${a.name}\n${a.brief||''}\n${ARC_FIELDS.map(k=>k+': '+(a.arc?.[k]||'')).join('\n')}`);
  for(const s of project.scenes){lines.push(`SCENE: ${s.title}`,SCENE_FIELDS.map(k=>k+': '+(s.plan?.[k]||'')).join('\n'));for(const x of s.shots)lines.push(`SHOT: ${x.title} · ${x.seconds}s\n${x.action||''}\nCamera: ${x.camera||''}\nDialogue: ${x.dialogue||''}`,...(x.panels||[]).map((p,i)=>`Panel ${i+1} · ${p.frames} frames: ${p.action||''}`));}

@@ -1,5 +1,6 @@
 import {STORY_FIELDS,SCENE_FIELDS,ARC_FIELDS,ASSET_STATES,boardFrames,fitPanels,planningBasis,planningIssues,removeBeat,removeBeatConfirmMessage,clearAllBeats,clearAllBeatsConfirmMessage,storyBeatCount,removePanelConfirmMessage,removeAudioTrackConfirmMessage,reorderBeatOptions,destIndexFromBeatPlace,moveBeat,reorderPanelOptions,destIndexFromPanelPlace,movePanel,ensureAudioTrackIds,reorderAudioTrackOptions,destIndexFromAudioTrackPlace,moveAudioTrack,planningDocument,usesBoards,addPanel,removePanel,duplicatePanel,setPanelFrames,listScenePlanSources,copyScenePlan} from './director-planning-state.js';
 import {countWords,feedManuscript,MANUSCRIPT_MAX_CHARS} from './director-manuscript.js';
+import {applyPrototypeDraft,blankCharacterSheet,prototypeShotsToEpisode,outlineFromManuscript,cutPrototypeRow,restoreDarling,DESIGN_KINDS,feedScreenplay} from './director-prototype.js';
 import {shotCast} from './director-production.js';
 import {audioOverviewControls} from './director-audio-overview.js';
 const labels={premise:'Premise · who wants what, and what stands in the way?',audience:'Audience & tone',theme:'Theme · the question your story explores',worldRules:'World rules & continuity',ending:'Ending · what changes?',purpose:'Why this scene exists',goal:'Character goal',obstacle:'Obstacle',turn:'Turning point',outcome:'Outcome · what changes?',script:'Scene script',want:'What they want',need:'What they need',flaw:'Flaw / fear',change:'How they change'};
@@ -7,10 +8,38 @@ const el=(tag,text)=>{const e=document.createElement(tag);if(text)e.textContent=
 function section(parent,title,key){const d=el('details');d.className='settings planning-section';d.dataset.plan=key;d.append(el('summary',title));parent.append(d);return d;}
 function select(parent,label,items,value,fn){const l=el('label',label);l.className='field';const s=el('select');s.setAttribute('aria-label',label);for(const [v,t] of items)s.add(new Option(t,v));s.value=value;s.onchange=()=>fn(s.value);l.append(s);parent.append(l);return s;}
 function move(list,index,delta){const to=index+delta;if(to>=0&&to<list.length)[list[index],list[to]]=[list[to],list[index]];}
+function planPicture(parent,label,shot,bucket,key,{change,upload,tell,button}){
+ const box=el('div');box.className='plan-picture';
+ const file=shot[bucket]?.[key];
+ if(file){const img=el('img');img.alt=label;img.loading='lazy';img.src='/view?'+new URLSearchParams({filename:file.name||file.filename,subfolder:file.subfolder||'',type:file.type||'input'});box.append(img);}
+ const canvas=el('canvas');canvas.width=480;canvas.height=270;canvas.setAttribute('aria-label',label+' paint');canvas.style.width='100%';canvas.style.maxWidth='480px';canvas.style.background='#d8d2c8';canvas.style.touchAction='none';
+ const ctx=canvas.getContext('2d');ctx.fillStyle='#d8d2c8';ctx.fillRect(0,0,480,270);
+ const color=el('input');color.type='color';color.value='#c4553a';color.setAttribute('aria-label',label+' paint color');
+ let drawing=false;
+ const point=event=>{const rect=canvas.getBoundingClientRect();return [(event.clientX-rect.left)*canvas.width/rect.width,(event.clientY-rect.top)*canvas.height/rect.height];};
+ canvas.onpointerdown=event=>{drawing=true;canvas.setPointerCapture(event.pointerId);const [x,y]=point(event);ctx.fillStyle=color.value;ctx.beginPath();ctx.arc(x,y,10,0,Math.PI*2);ctx.fill();};
+ canvas.onpointermove=event=>{if(!drawing)return;const [x,y]=point(event);ctx.fillStyle=color.value;ctx.beginPath();ctx.arc(x,y,10,0,Math.PI*2);ctx.fill();};
+ canvas.onpointerup=()=>{drawing=false;};
+ const save=async chosen=>{
+  const uploaded=chosen?await upload(chosen):await new Promise(resolve=>canvas.toBlob(blob=>resolve(blob?new File([blob],label.toLowerCase().replace(/\s+/g,'-')+'.png',{type:'image/png'}):null),'image/png')).then(file=>file&&upload(file));
+  if(!uploaded)throw Error('The picture was not saved.');
+  change(()=>{shot[bucket]??={};shot[bucket][key]=uploaded;});
+  tell?.(label+' saved. Undo restores.');
+ };
+ const fileInput=el('input');fileInput.type='file';fileInput.accept='image/png,image/jpeg,image/webp';fileInput.setAttribute('aria-label',label+' file');
+ fileInput.onchange=async()=>{try{await save(fileInput.files[0]);}catch(error){tell?.(error.message);}};
+ box.append(color,canvas,button('Paint '+label.toLowerCase(),()=>save().catch(error=>tell?.(error.message))),fileInput);
+ parent.append(box);
+}
 export function storyRoom(parent,project,{field,button,change,download,tell}){
  parent.replaceChildren();const d=section(parent,'Story Room · premise, characters & beats','story-room');
  d.append(el('p','Plan the story before making finished shots. Start with the premise, then add only the detail you need.'));
  for(const k of STORY_FIELDS)field(d,labels[k],project.story?.[k],(v,o)=>change(()=>{project.story??={beats:[]};project.story[k]=v;},o),'textarea');
+ select(d,'Fiction',[['','Cartoon'],['dark','Dark fiction']],project.story?.fiction||'',v=>change(()=>{project.story??={beats:[]};if(v)project.story.fiction=v;else delete project.story.fiction;}));
+ d.append(el('p','Dark fiction keeps horror, dread, and violence in the writing draft. If an installed model still refuses, set Model source to an uncensored model already in Ollama or LM Studio. Sexual content involving anyone under 18 stays out.'));
+ d.append(el('p','Style sheet · shapes, line, and palette stay for the whole film. A shot’s color script changes the light of that moment only. Visual style, above, is the short name of this look.'));
+ const styleLabels={shapes:'Shapes · one form per character',line:'Line · weight, color, open or closed',palette:'Film palette · the few colors everyone uses',light:'Usual light · direction and how dark it gets',never:'Never · what would break the film'};
+ for(const key of ['shapes','line','palette','light','never'])field(d,styleLabels[key],project.story?.styleGuide?.[key]||'',(v,o)=>change(()=>{project.story??={beats:[]};project.story.styleGuide??={};project.story.styleGuide[key]=v;},o),'textarea');
  const manuscriptHost=el('div');manuscriptHost.className='manuscript-block';
  manuscriptHost.append(el('p','Manuscript · draft scenes in plain text. A line with only *** starts a new scene. A line starting with # Title names the scene. Feed manuscript appends scenes (existing ones stay). Undo restores.'));
  const wordMeta=el('p');wordMeta.className='hint manuscript-words';
@@ -31,9 +60,39 @@ export function storyRoom(parent,project,{field,button,change,download,tell}){
   }catch(e){tell?.(e.message);}
  }));
  d.append(manuscriptHost);
+ const screenplayHost=el('div');
+ screenplayHost.append(el('p','Screenplay · slug, action, and dialogue before pictures. A scene starts with INT. or EXT. A line in CAPITALS is the speaker. Feed screenplay appends scenes. Existing scenes stay. Undo restores.'));
+ field(screenplayHost,'Screenplay',project.story?.screenplay||'',(v,o)=>change(()=>{project.story??={beats:[]};project.story.screenplay=v;},o),'textarea');
+ screenplayHost.append(button('Feed screenplay',()=>{try{let n;change(()=>{project.story??={beats:[]};n=feedScreenplay(project,project.story.screenplay||'');});tell?.(n+' screenplay scene'+(n===1?'':'s')+' appended. Existing scenes kept. Undo restores.');}catch(e){tell?.(e.message);}}));
+ d.append(screenplayHost);
+ const proto=el('div');proto.className='prototype-board';
+ proto.append(el('p','Prototype board · an outline of the story before finished boards. NEO scene breaks in the manuscript can fill this list. Cutting a row parks it, the way a cut line is kept, so you can put it back. This is not the animatic.'));
+ const events=()=>project.story?.prototype?.events||[];
+ const eventList=el('div');proto.append(eventList);
+ const paintEvents=()=>{eventList.replaceChildren();events().forEach((event,index)=>{
+  const card=el('section');card.className='beat-card';
+  field(card,'Part',event.part||'',(v,o)=>change(()=>event.part=v,o));
+  field(card,'Prototype title',event.title,(v,o)=>change(()=>event.title=v,o));
+  field(card,'Starts at (seconds)',event.start,v=>change(()=>event.start=Number(v)),'number');
+  field(card,'Length (seconds)',event.seconds,v=>change(()=>event.seconds=Number(v)),'number');
+  select(card,'Row type',[['event','Event'],['shot','Shot']],event.kind,v=>change(()=>event.kind=v));
+  field(card,'What the picture must show',event.note||'',(v,o)=>change(()=>event.note=v,o),'textarea');
+  card.append(button('Cut prototype row',()=>change(()=>cutPrototypeRow(project,index))));
+  eventList.append(card);
+ });};
+ paintEvents();
+ proto.append(button('Add prototype row',()=>change(()=>{project.story??={beats:[]};project.story.prototype??={events:[]};project.story.prototype.events.push({id:crypto.randomUUID(),title:'New moment',start:events().reduce((n,event)=>Math.max(n,event.start+event.seconds),0),seconds:6,kind:'shot',note:''});})));
+ proto.append(button('Outline from manuscript',()=>{try{let n;change(()=>{n=outlineFromManuscript(project);});tell?.(n+' scene'+(n===1?'':'s')+' outlined from the manuscript. Undo restores.');}catch(e){tell?.(e.message);}}));
+ proto.append(button('Add prototype shots to the episode',()=>{try{let n;change(()=>{n=prototypeShotsToEpisode(project);});tell?.(n+' prototype shot'+(n===1?'':'s')+' appended. Existing scenes kept. Undo restores.');}catch(e){tell?.(e.message);}}));
+ const cuts=project.story?.prototype?.darlings||[];
+ if(cuts.length){
+  proto.append(el('p','Cut lines'));
+  for(const darling of cuts)proto.append(button('Restore '+darling.title,()=>change(()=>restoreDarling(project,darling.id))));
+ }
+ d.append(proto);
  const board=el('div');board.className='beat-board';d.append(board);
  for(const [i,b] of (project.story?.beats||[]).entries()){
-  const card=el('section');card.className='beat-card';card.dataset.beatId=b.id;card.append(el('h3',Beat ));
+  const card=el('section');card.className='beat-card';card.dataset.beatId=b.id;card.append(el('h3','Beat '+(i+1)));
   field(card,'Beat title',b.title,(v,o)=>change(()=>b.title=v,o));field(card,'Act / sequence',b.act,(v,o)=>change(()=>b.act=v,o));field(card,'Event, choice & consequence',b.summary,(v,o)=>change(()=>b.summary=v,o),'textarea');
   select(card,'Pays off an earlier beat',[['','No setup link'],...project.story.beats.filter(x=>x!==b).map(x=>[x.id,x.title])],b.setupId||'',v=>change(()=>{if(v)b.setupId=v;else delete b.setupId;}));
   const actions=el('div');actions.className='actions';actions.append(button('Move beat earlier',()=>change(()=>move(project.story.beats,i,-1))),button('Move beat later',()=>change(()=>move(project.story.beats,i,1))),button('Remove beat',()=>{if(!confirm(removeBeatConfirmMessage(b)))return;const label=(typeof b.title==='string'&&b.title.trim())?b.title.trim():'Untitled beat';change(()=>removeBeat(project,b.id));tell?.(label+' removed. Undo restores.');}));card.append(actions);
@@ -114,14 +173,51 @@ export function scenePlanning(parent,project,scene,{field,button,change,tell}){
  });
  copyBtn.disabled=!sources.length;copyBox.append(copyBtn);d.append(copyBox);
 }
-export function assetPlanning(parent,asset,{field,change}){
+export function assetPlanning(parent,asset,{field,change,attach}){
  const d=section(parent,'Character arc & production readiness','asset-'+asset.id);
  select(d,'Asset readiness',ASSET_STATES.map(s=>[s,s]),asset.readiness||'Not started',v=>change(()=>asset.readiness=v));
- if(asset.kind==='character')for(const k of ARC_FIELDS)field(d,labels[k],asset.arc?.[k],(v,o)=>change(()=>{asset.arc??={};asset.arc[k]=v;},o),'textarea');
+ if(asset.kind==='character'){
+  for(const k of ARC_FIELDS)field(d,labels[k],asset.arc?.[k],(v,o)=>change(()=>{asset.arc??={};asset.arc[k]=v;},o),'textarea');
+  d.append(el('p','Size chart · height is in door-heights. 1 means the character fills the doorway. The note says what that drawing must prove.'));
+  const height=el('input');height.type='number';height.min='0.2';height.max='4';height.step='0.1';height.value=asset.design?.height??'';height.setAttribute('aria-label','Height in door-heights');
+  height.onchange=()=>change(()=>{asset.design??={views:[],outfits:[],hair:[]};const n=Number(height.value);if(!height.value)delete asset.design.height;else asset.design.height=n;});
+  const heightLabel=el('label','Height in door-heights');heightLabel.className='field';heightLabel.append(height);d.append(heightLabel);
+  field(d,'Size-chart note',asset.design?.scaleNote||'',(v,o)=>change(()=>{asset.design??={views:[],outfits:[],hair:[]};asset.design.scaleNote=v;},o),'textarea');
+  field(d,'Silhouette shape',asset.design?.shape||'',(v,o)=>change(()=>{asset.design??={views:[],outfits:[],hair:[]};asset.design.shape=v;},o),'textarea');
+  d.append(button('Start character sheet',()=>change(()=>{const height=asset.design?.height,scaleNote=asset.design?.scaleNote,shape=asset.design?.shape;asset.design=blankCharacterSheet();if(height!==undefined)asset.design.height=height;if(scaleNote)asset.design.scaleNote=scaleNote;if(shape)asset.design.shape=shape;})));
+  const labelsKind={views:'View',outfits:'Outfit',hair:'Hair'};
+  for(const kind of DESIGN_KINDS){
+   for(const [index,item] of (asset.design?.[kind]||[]).entries()){
+    field(d,labelsKind[kind]+' name',item.name,(v,o)=>change(()=>item.name=v,o));
+    field(d,labelsKind[kind]+' note',item.note||'',(v,o)=>change(()=>item.note=v,o),'textarea');
+    if(attach)attach(d,labelsKind[kind]+' drawing',item,'drawing','image/png,image/jpeg,image/webp');
+    d.append(button('Remove '+labelsKind[kind].toLowerCase(),()=>change(()=>asset.design[kind].splice(index,1))));
+   }
+   d.append(button('Add '+labelsKind[kind].toLowerCase(),()=>change(()=>{asset.design??={views:[],outfits:[],hair:[]};asset.design[kind]??=[];asset.design[kind].push({id:crypto.randomUUID(),name:'New',note:''});})));
+  }
+ }
 }
-export function shotPlanning(parent,project,scene,shot,{field,button,change,attach,tell}){
+export function shotPlanning(parent,project,scene,shot,{field,button,change,attach,upload,tell}){
  const d=section(parent,'Storyboard panels & sound tracks','shot-plan-'+shot.id);
  d.append(el('p','This plan is the shot the animatic and assembly use: the action, the duration at 24 frames a second, these panels, and the cast below. Picture source chooses the storyboard or the recorded clip. Editing a panel’s frames keeps the total on that duration.'));
+ if(!shot.reelWatched)d.append(el('p','The story reel is not marked watched. You can still pose. Watch the animatic before you treat the acting as final.'));
+ const reel=el('input');reel.type='checkbox';reel.checked=!!shot.reelWatched;reel.setAttribute('aria-label','Story reel watched');reel.onchange=()=>change(()=>{if(reel.checked)shot.reelWatched=true;else delete shot.reelWatched;});
+ const reelLabel=el('label','Story reel watched');reelLabel.className='field';reelLabel.append(reel);d.append(reelLabel);
+ d.append(el('p','Layout sheet · one place for the camera, the screen direction, the contacts, and the movement. This is the plan. The camera keys are the move.'));
+ field(d,'Layout camera',shot.layout?.camera||'',(v,o)=>change(()=>{shot.layout??={};shot.layout.camera=v;},o),'textarea');
+ select(d,'Screen direction',[['neutral','Neutral'],['screen-left','Screen left'],['screen-right','Screen right']],shot.layout?.direction||'neutral',v=>change(()=>{shot.layout??={};shot.layout.direction=v;}));
+ field(d,'Contacts',shot.layout?.contacts||'',(v,o)=>change(()=>{shot.layout??={};shot.layout.contacts=v;},o),'textarea');
+ field(d,'Movement',shot.layout?.movement||'',(v,o)=>change(()=>{shot.layout??={};shot.layout.movement=v;},o),'textarea');
+ planPicture(d,'Layout drawing',shot,'layout','drawing',{change,upload,tell,button});
+ d.append(el('p','Color script · the light of this moment, named before the frame is painted.'));
+ field(d,'Light',shot.colorScript?.light||'',(v,o)=>change(()=>{shot.colorScript??={};shot.colorScript.light=v;},o));
+ field(d,'Palette',shot.colorScript?.palette||'',(v,o)=>change(()=>{shot.colorScript??={};shot.colorScript.palette=v;},o));
+ field(d,'Mood',shot.colorScript?.mood||'',(v,o)=>change(()=>{shot.colorScript??={};shot.colorScript.mood=v;},o));
+ const film=project.story?.styleGuide;
+ if(film?.palette)d.append(button('Use film palette',()=>change(()=>{shot.colorScript??={};shot.colorScript.palette=film.palette;})));
+ if(film?.light)d.append(button('Use film light',()=>change(()=>{shot.colorScript??={};shot.colorScript.light=film.light;})));
+ d.append(el('p','Assemble holds the layout drawing, or the color frame if there is no layout drawing, for this shot’s length when no clip is attached. A recorded clip still wins when Picture source is Finished shot. That hold is the plan, not the acted performance.'));
+ planPicture(d,'Color frame',shot,'colorScript','frame',{change,upload,tell,button});
  const needed=shot.seconds*24,covered=boardFrames(shot),picture=usesBoards(shot)?'Storyboard panels':shot.media?'Recorded clip':'No picture attached yet';
  d.append(el('p',`Animatic and assembly: ${shot.seconds}s · ${needed} frames · ${picture}.`));
  if(usesBoards(shot)&&shot.media)d.append(el('p','A clip is attached. The animatic still plays the storyboard until you choose Finished shot.'));

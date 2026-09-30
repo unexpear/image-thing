@@ -2,7 +2,7 @@ import {createEpisodeAudioPreview} from './director-episode-audio.js';
 import {episodeBeatTimes} from './director-beat-markers.js';
 import {mountSafeAreaGuides, paintTitleOverlay, safeAreaGuideControls, safeAreaGuidesOn} from './director-title-styles.js';
 import {createTransportGain, spliceSeekMedia, ensureSpliceAlt} from './director-audio-edit.js';
-import {panelAt,usesBoards,boardFrames,plannedAssets} from './director-planning-state.js';
+import {panelAt,usesBoards,boardFrames,plannedAssets,planStill,planStillLabel,animaticPictureLabel,animaticPlanStatus} from './director-planning-state.js';
 import {shotTransition, transitionOverlaps, mediaPlaybackWindow, shotPlaybackSpeed, shotHoldSeconds, setShotTransition, SHOT_TRANSITION_OPTIONS} from './director-timing.js';
 export function shotTimeline(project){
  let cursor=0;
@@ -574,7 +574,8 @@ function display(){
   const local=Math.max(0,position-entry.start),frame=Math.min(entry.shot.seconds*24-1,Math.floor(local*24+1e-7));
   const cast=!shown||entry.shot.assetIds===undefined?'':plannedAssets(shown,entry.shot).map(asset=>asset.name).join(', ')||'No cast selected';
   const board=usesBoards(entry.shot)?panelAt(entry.shot,local):null;
-  const pictureLabel=usesBoards(entry.shot)?(board?`Storyboard panel ${(entry.shot.panels||[]).indexOf(board)+1}`:`Past the storyboard · ${boardFrames(entry.shot)}/${entry.shot.seconds*24} frames`):entry.shot.media?'Recorded clip':'Planned shot · no picture yet';
+  const still=planStill(entry.shot),stillLabel=planStillLabel(entry.shot);
+  const pictureLabel=animaticPictureLabel(entry.shot,board);
   const tType=pair?(pair.outgoing.transitionType||pair.outgoing.shot?.transition?.type||'dissolve'):'';const dissolveNote=pair?` · ${tType} ${Math.round(pair.progress*100)}%`:'';
   selector.value=String(entry.start);const holdSec=(()=>{try{return shotHoldSeconds(entry.shot);}catch{return 0;}})();
   const holdNote=holdSec?(' · hold '+holdSec+'s last frame'):'';
@@ -592,13 +593,13 @@ function display(){
     for(const t of tracks){clearBagTransport(t);t.element.pause();t.element.remove();}tracks=[];
     generation++;
    }else release();
-   active=entry;failed=false;const token=generation,file=usesBoards(entry.shot)?null:entry.shot.media;
+   active=entry;failed=false;const token=generation,file=usesBoards(entry.shot)?null:entry.shot.media||planStill(entry.shot);
    clearLayer(layerIn);
    if(!file){layerIn.textContent=entry.shot.action||'Storyboard not attached';status.textContent='Missing media: this placeholder preserves the shot’s timing.';}
    else{
     const name=file.name||file.filename||'';mediaBag=null;media=node(/\.(mp4|webm|mov|mkv|m4v)$/i.test(name)?'video':'img');
     if(media.tagName==='VIDEO'){media.muted=!!entry.shot.audio;media.volume=0;media.playsInline=true;media.preload='auto';media.onloadeddata=()=>{if(token!==generation)return;status.textContent='Ready · video preview';syncVideo();};media.onwaiting=()=>{if(token===generation)status.textContent='Buffering media · timing preview continues';};}
-    else{media.alt='Storyboard preview';media.onload=()=>{if(token===generation)status.textContent='Ready · storyboard still';};}
+    else{media.alt=entry.shot.media?'Storyboard preview':(planStillLabel(entry.shot)||'Plan picture');media.onload=()=>{if(token===generation)status.textContent=entry.shot.media?'Ready · storyboard still':animaticPlanStatus(planStillLabel(entry.shot)||'plan');};}
     media.onerror=()=>{if(token!==generation)return;failed=true;status.textContent='Media unavailable or unsupported. Reattach this shot’s file; its timing is preserved.';clearLayer(layerIn);layerIn.textContent='Preview unavailable';};
     status.textContent='Loading shot media…';media.src=mediaURL(file);layerIn.append(media);
    }
@@ -623,9 +624,10 @@ function display(){
    if(picture!==selected){picture=selected;clearLayer(layerIn);media=null;
     if(!selected)layerIn.textContent=entry.shot.action||'This frame is past the storyboard.';
     else if(selected.media){const img=node('img');img.alt=selected.action||'Storyboard panel';img.src=mediaURL(selected.media);img.onerror=()=>{if(picture===selected)status.textContent='Panel drawing unavailable. Reattach its file.';};layerIn.append(img);}
+    else if(planStill(entry.shot)){const img=node('img');img.alt=planStillLabel(entry.shot);img.src=mediaURL(planStill(entry.shot));layerIn.append(img);}
     else layerIn.textContent=selected.action||'Add a storyboard panel drawing';
    }
-   status.textContent=selected?'Storyboard panel '+((entry.shot.panels||[]).indexOf(selected)+1)+' · '+selected.frames+' planned frames':`Storyboard covers ${boardFrames(entry.shot)} frames; this shot is ${entry.shot.seconds*24}. Fit panel timing so the animatic matches the plan.`;
+   status.textContent=selected&&!selected.media&&still?animaticPlanStatus(stillLabel):selected?'Storyboard panel '+((entry.shot.panels||[]).indexOf(selected)+1)+' · '+selected.frames+' planned frames':`Storyboard covers ${boardFrames(entry.shot)} frames; this shot is ${entry.shot.seconds*24}. Fit panel timing so the animatic matches the plan.`;
   }
   if(pair){applyTransitionLayers(layerOut,layerIn,pair.outgoing.transitionType||pair.outgoing.shot?.transition?.type||'dissolve',pair.progress,layerPlate);}
   else{
@@ -651,7 +653,7 @@ function display(){
  document.addEventListener('visibilitychange',()=>{if(document.hidden)pause();});
  window.addEventListener('pagehide',()=>{pause();release();episodeSound.release();});
  return {reset(project){
-  shown=project;const next=shotTimeline(project),key=JSON.stringify([project.id,project.episodeAudio,project.ducking,project.assets.map(asset=>[asset.id,asset.name,asset.kind]),next.map(e=>[e.scene,e.shot.id,e.shot.title,e.shot.action,e.shot.seconds,e.shot.media,e.shot.audio,e.shot.visualSource,e.shot.panels,e.shot.audioTracks,e.shot.assetIds,e.shot.transition,e.shot.holdSeconds,e.shot.playbackSpeed,e.dissolveOut,e.shot.subtitle,e.shot.titleOverlay]),project.previewGuides,project.titleStyles]);
+  shown=project;const next=shotTimeline(project),key=JSON.stringify([project.id,project.episodeAudio,project.ducking,project.assets.map(asset=>[asset.id,asset.name,asset.kind]),next.map(e=>[e.scene,e.shot.id,e.shot.title,e.shot.action,e.shot.seconds,e.shot.media,e.shot.audio,e.shot.visualSource,e.shot.panels,e.shot.audioTracks,e.shot.assetIds,e.shot.transition,e.shot.holdSeconds,e.shot.playbackSpeed,e.dissolveOut,e.shot.subtitle,e.shot.titleOverlay,e.shot.layout?.drawing,e.shot.colorScript?.frame]),project.previewGuides,project.titleStyles]);
   if(key===signature){bindGuideControls(project);if(panel.open)display();return;}signature=key;pause();release();bindGuideControls(project);episodeSound.reset(project.episodeAudio,project);entries=next;total=entries.at(-1)?.end||0;position=0;scrub.max=total;play.disabled=!total;scrub.disabled=!total;
   selector.replaceChildren(...entries.map((e,i)=>new Option((i+1)+'. '+e.scene+' / '+(e.shot.title||'Untitled shot')+' · '+frameTime(e.start),String(e.start))));selector.disabled=!total;
   counter.textContent=frameTime(0)+' / '+frameTime(total);if(panel.open)display();
