@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import {addRoomLayout} from '../../simple-editor/director-room.js';
+import {characterSetup} from '../../simple-editor/director-performance-state.js';
+const rig={names:['Root'],props:[]},options={name:'Hall',width:6,depth:5,height:3,doorWidth:1.2,doorHeight:2.2};
+const next=addRoomLayout(rig,options);assert.equal(rig.props.length,0);assert.equal(next.props.length,5);
+const floor=next.props.find(p=>p.name.endsWith('Floor'));assert.equal(floor.position[1]+floor.size[1]/2,0);
+const left=next.props.find(p=>p.name.endsWith('Door left')),right=next.props.find(p=>p.name.endsWith('Door right')),lintel=next.props.find(p=>p.name.endsWith('Door lintel'));
+assert.ok(Math.abs(left.position[0]+left.size[0]/2+.6)<1e-10);assert.ok(Math.abs(right.position[0]-right.size[0]/2-.6)<1e-10);assert.equal(lintel.position[1]-lintel.size[1]/2,2.2);
+assert.equal(addRoomLayout(rig,{...options,rightWall:true}).props.length,6);assert.equal(new Set(next.props.map(p=>p.id)).size,5);
+assert.deepEqual(characterSetup(next).rig.props,next.props);
+assert.throws(()=>addRoomLayout(rig,{...options,doorWidth:6}),/doorway/);
+assert.throws(()=>addRoomLayout(rig,{...options,height:NaN}),/room width/);
+const full={names:['Root'],props:Array.from({length:20},(_,i)=>({...floor,id:'prop'+i}))};assert.throws(()=>addRoomLayout(full,options),/24/);assert.equal(full.props.length,20);
+console.log('Room layout passed: floor plane, clear door opening, independent parts, optional wall, reusable setup, bounds/capacity and nonmutation.');

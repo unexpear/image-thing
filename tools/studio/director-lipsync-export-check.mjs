@@ -1,0 +1,8 @@
+import assert from 'node:assert/strict';
+import {starterCharacter,jointsOf,faceControls,exportRigGLB} from '../../simple-editor/director-3d-engine.js';
+import {validateBytes} from '../blender/node_modules/gltf-validator/module.mjs';
+globalThis.FileReader=class{readAsArrayBuffer(blob){blob.arrayBuffer().then(buffer=>{this.result=buffer;this.onloadend?.();});}readAsDataURL(blob){blob.arrayBuffer().then(buffer=>{this.result='data:'+blob.type+';base64,'+Buffer.from(buffer).toString('base64');this.onloadend?.();});}};
+const root=starterCharacter(),bones=jointsOf(root),rest=bones.map(b=>b.quaternion.clone());let mesh;root.traverse(o=>{if(o.isSkinnedMesh)mesh=o;});
+const mouth=mesh.geometry.attributes.position.clone();mouth.name='MouthOpen';for(let i=0;i<mouth.count;i++)if(mouth.getY(i)>1.7)mouth.setY(i,mouth.getY(i)+.1);mesh.geometry.morphAttributes.position=[mouth];mesh.updateMorphTargets();
+const rig={version:1,model:null,names:bones.map(b=>b.name),pose:bones.map(()=>[0,0,0]),keys:[],face:[0],mouthMap:{D:0},lipSync:{mouthCues:[{start:0,end:.5,value:'X'},{start:.5,end:1,value:'D'},{start:1,end:2,value:'X'}]}};
+const data=await exportRigGLB(root,bones,rest,rig,2,bones[0].position.clone(),faceControls(root));const report=await validateBytes(new Uint8Array(data));assert.equal(report.issues.numErrors,0,JSON.stringify(report.issues));const bytes=Buffer.from(data),json=JSON.parse(bytes.subarray(20,20+bytes.readUInt32LE(12)).toString());assert.ok(json.animations[0].channels.some(c=>c.target.path==='weights'));console.log('Lip-sync-only GLB exports a valid morph animation without body keyframes.');

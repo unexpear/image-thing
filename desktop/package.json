@@ -1,0 +1,10 @@
+{
+  "name": "local-studio-desktop",
+  "productName": "Local Studio",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Desktop workspace for local images, video, 3D and Cartoon Director",
+  "main": "main.cjs",
+  "scripts": {"start": "electron ."},
+  "devDependencies": {"electron": "44.3.0"}
+}

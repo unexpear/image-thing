@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "manifest": {
+    "studio-cartoon-review\\SKILL.md": [
+      1789932205885905600,
+      1137
+    ]
+  },
+  "skills": [
+    {
+      "skill_name": "studio-cartoon-review",
+      "category": "studio-cartoon-review",
+      "frontmatter_name": "studio-cartoon-review",
+      "description": "Review Needle shot drafts against cartoon briefs.",
+      "platforms": [],
+      "conditions": {
+        "fallback_for_toolsets": [],
+        "requires_toolsets": [],
+        "fallback_for_tools": [],
+        "requires_tools": []
+      }
+    }
+  ],
+  "category_descriptions": {}
+}

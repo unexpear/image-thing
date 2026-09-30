@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import * as THREE from 'three';
+import {starterCharacter,jointsOf,exportRigGLB,readRigGLB,applyPose} from '../../simple-editor/director-3d-engine.js';
+import {fingerJoints,saveHandPose,blendHandPose} from '../../simple-editor/director-hands.js';
+import {validateBytes} from '../blender/node_modules/gltf-validator/module.mjs';
+globalThis.FileReader=class{readAsArrayBuffer(b){b.arrayBuffer().then(v=>{this.result=v;this.onloadend?.();});}};
+globalThis.ProgressEvent=class{constructor(type,props){Object.assign(this,{type},props);}};
+assert.equal(jointsOf(starterCharacter()).length,15);
+const root=starterCharacter({fingers:true}),bones=jointsOf(root),rest=bones.map(b=>b.quaternion.clone());assert.equal(bones.length,43);
+const left=bones.findIndex(b=>b.name==='Left hand'),right=bones.findIndex(b=>b.name==='Right hand');assert.equal(fingerJoints(bones,left).length,14);assert.equal(fingerJoints(bones,right).length,14);
+let rig={version:1,model:null,names:bones.map(b=>b.name),pose:bones.map(()=>[0,0,0]),keys:[]};const baseline=bones.map(b=>b.getWorldPosition(new THREE.Vector3()));
+for(const i of fingerJoints(bones,left))rig.pose[i][0]=-50;rig=saveHandPose(rig,bones,left,'Left curl');const grip=structuredClone(rig.pose);rig.pose=bones.map(()=>[0,0,0]);rig=blendHandPose(rig,bones,'Left curl',1);applyPose(bones,rest,rig.pose);root.updateMatrixWorld(true);
+for(const i of [left,right,...fingerJoints(bones,right)])assert.ok(bones[i].getWorldPosition(new THREE.Vector3()).distanceTo(baseline[i])<1e-6);
+rig.keys=[{frame:0,pose:bones.map(()=>[0,0,0]),easing:'smooth'},{frame:24,pose:grip,easing:'smooth'}];
+const data=await exportRigGLB(root,bones,rest,rig,2,bones[0].position.clone(),[]);assert.equal((await validateBytes(new Uint8Array(data))).issues.numErrors,0);const loaded=await readRigGLB(data);assert.equal(jointsOf(loaded).length,43);
+console.log('Finger starter passed: legacy 15 joints, articulated 43, bilateral descendants, isolated left curl and validator-clean animated GLB reload.');

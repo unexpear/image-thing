@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import {setTravelPoint} from '../../simple-editor/director-path2d.js';
+import {sampleMotion,validateMotion} from '../../simple-editor/director-motion.js';
+const board={version:1,layers:[{id:'a',name:'Actor',visible:true,locked:false,opacity:1,strokes:[]}]};
+const source=JSON.stringify(board);
+let next=setTravelPoint(board,'a',0,0,0,119);next=setTravelPoint(next,'a',24,120,-60,119);next=setTravelPoint(next,'a',48,240,0,119);validateMotion(next);
+assert.equal(JSON.stringify(board),source);
+const middle=sampleMotion(next,12).layers[0].rig;assert.equal(middle.x,60);assert.equal(middle.y,-30);
+assert.equal(sampleMotion(next,119).layers[0].rig.x,240);
+const edit=setTravelPoint(next,'a',24,150,-90,119);assert.equal(next.channels[0].keys[1].value,120);assert.equal(edit.channels[0].keys.length,3);
+assert.throws(()=>setTravelPoint(board,'a',120,0,0,119),/frame/);
+assert.throws(()=>setTravelPoint(board,'a',0,2000,0,119),/value/);
+assert.throws(()=>setTravelPoint({...board,walk:{}},'a',0,0,0,119),/walking/);
+assert.throws(()=>setTravelPoint({...board,layers:[{...board.layers[0],locked:true}]},'a',0,0,0,119),/unlocked/);
+const disabled=structuredClone(next);disabled.channels[0].enabled=false;assert.throws(()=>setTravelPoint(disabled,'a',0,0,0,119),/Enable/);
+console.log('2D path checks passed: paired editable keys, sampled straight segments and hold, bounds, locks, walk/disabled conflicts and nonmutation.');

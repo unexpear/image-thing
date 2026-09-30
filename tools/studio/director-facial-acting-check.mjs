@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import {draftEyeBlink,draftGaze,validateEyeMap} from '../../simple-editor/director-facial-acting.js';
+import {sampleChannel,validateRig3D} from '../../simple-editor/director-3d-state.js';
+const rig={version:1,model:null,names:['head'],pose:[[0,0,0]],keys:[],face:[0,0,0,0,0,0,0],eyeMap:{blinkLeft:0,blinkRight:1,lookLeft:2,lookRight:3,lookUp:4,lookDown:5},faceKeys:[{frame:0,easing:'linear',face:[.1,.1,0,0,0,0,0]},{frame:24,easing:'linear',face:[.3,.3,0,0,0,0,1]}]};
+const source=JSON.stringify(rig),blink=draftEyeBlink(rig,{start:4,close:2,hold:1,open:4,lag:2,lastFrame:47});validateRig3D(blink);assert.equal(JSON.stringify(rig),source);
+const sample=(r,f)=>sampleChannel(r,f,'face',r.face);
+assert.equal(sample(blink,6)[0],1);assert.equal(sample(blink,6)[1],sample(rig,6)[1]);assert.equal(sample(blink,8)[1],1);
+for(const f of [0,3,14,24])assert.deepEqual(sample(blink,f),sample(rig,f));
+for(const f of [4,5,6,7,8,9,10,11,12])assert.equal(sample(blink,f)[6],sample(rig,f)[6]);
+const gaze=draftGaze(blink,{start:0,duration:4,x:.7,y:-.2,lastFrame:47,face:sample(blink,0)});validateRig3D(gaze);assert.equal(sample(gaze,4)[3],.7);assert.equal(sample(gaze,4)[5],.2);assert.equal(sample(gaze,6)[0],1);
+assert.throws(()=>draftEyeBlink(blink,{start:5,lastFrame:47}),/overlaps/);
+assert.throws(()=>draftEyeBlink(rig,{start:44,lastFrame:47}),/beyond/);
+assert.throws(()=>validateEyeMap({...rig,eyeMap:{blinkLeft:0,blinkRight:0}}),/distinct/);
+assert.throws(()=>validateEyeMap({...rig,mouthMap:{A:0}}),/mouth/);
+const wink=draftEyeBlink(rig,{start:0,side:'left',strength:.5,lastFrame:47});assert.equal(wink.channels.length,1);assert.equal(sample(wink,2)[1],sample(rig,2)[1]);
+const twice=draftEyeBlink(blink,{start:30,lastFrame:47});assert.deepEqual(sample(twice,20),sample(rig,20));
+console.log('Facial acting passed: eyelid-only blends over animated expressions, staggered eyes, winks, gaze, repeat blinks, untouched smile, bounds and conflict rejection.');

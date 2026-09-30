@@ -1,0 +1,12 @@
+﻿{
+    "name":  "image-thing-studio",
+    "description":  "Local Cartoon Director / Studio workspace. Provides node resolution for tools/studio checks.",
+    "scripts":  {
+                    "check:director":  "node tools/studio/run-director-checks.mjs"
+                },
+    "type":  "module",
+    "dependencies":  {
+                         "three":  "file:./tools/studio-three/package"
+                     },
+    "private":  true
+}

@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import {saveHandPose,blendHandPose,validateHandPoses} from '../../simple-editor/director-hands.js';
+import {characterSetup} from '../../simple-editor/director-performance-state.js';
+const body={},wrist={parent:body},finger={parent:wrist},tip={parent:finger},other={parent:body},bones=[body,wrist,finger,tip,other];
+const rig={names:['Body','Wrist','Finger','Tip','Other'],pose:[[10,0,0],[20,0,0],[0,0,60],[0,0,80],[30,0,0]],keys:[],face:[.5]};
+const saved=saveHandPose(rig,bones,1,'Grip');assert.equal(rig.handPoses,undefined);assert.deepEqual(saved.handPoses[0].joints,[2,3]);
+saved.pose[2]=[0,0,0];saved.pose[3]=[0,0,0];const blend=blendHandPose(saved,bones,'Grip',.5);assert.deepEqual(blend.pose[2],[0,0,30]);assert.deepEqual(blend.pose[3],[0,0,40]);for(const i of [0,1,4])assert.deepEqual(blend.pose[i],rig.pose[i]);assert.deepEqual(blend.face,rig.face);assert.deepEqual(saved.pose[2],[0,0,0]);
+assert.deepEqual(characterSetup(saved).rig.handPoses,saved.handPoses);
+assert.throws(()=>saveHandPose(rig,bones,4,'Empty'),/finger descendants/);assert.throws(()=>blendHandPose(saved,bones,'Grip',2),/blend amount/);
+const constrained=structuredClone(saved);constrained.limits=bones.map(()=>null);constrained.limits[2]=[[-20,-20,-20],[20,20,20]];assert.throws(()=>blendHandPose(constrained,bones,'Grip',1),/limits/);
+tip.parent=body;assert.throws(()=>blendHandPose(saved,bones,'Grip',1),/hierarchy/);tip.parent=finger;
+assert.throws(()=>validateHandPoses({...rig,handPoses:null}),/32 hand/);const invalid=structuredClone(saved);invalid.handPoses[0].joints[1]=2;assert.throws(()=>validateHandPoses(invalid),/joints/);
+assert.equal(saveHandPose(saved,bones,1,'Grip').handPoses.length,1);
+console.log('Hand poses passed: descendants, partial blend, body/wrist/face isolation, source isolation, library persistence, hierarchy/limits/schema rejection and named replacement.');

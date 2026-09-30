@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import * as THREE from 'three';
+import {travelSpace} from '../../simple-editor/director-path3d.js';
+import {setRigTravelPoint} from '../../simple-editor/director-channels.js';
+import {sampleChannel} from '../../simple-editor/director-3d-state.js';
+const parent=new THREE.Group(),bone=new THREE.Bone();parent.position.set(3,2,-4);parent.rotation.set(.3,.7,-.2);parent.scale.set(2,3,4);parent.add(bone);bone.position.set(.2,1,.4);parent.updateMatrixWorld(true);
+const base=bone.position.toArray(),convert=travelSpace(bone,base),expected=[.7,-.25,.9],world=new THREE.Vector3(...base).add(new THREE.Vector3(...expected)).applyMatrix4(parent.matrixWorld);
+convert(world.toArray()).forEach((v,i)=>assert.ok(Math.abs(v-expected[i])<1e-12));
+assert.deepEqual(bone.position.toArray(),base);parent.position.x=100;parent.updateMatrixWorld(true);convert(world.toArray()).forEach((v,i)=>assert.ok(Math.abs(v-expected[i])<1e-12),'Drag space remains frozen');
+parent.scale.x=0;assert.throws(()=>travelSpace(bone,base),/zero scale/);
+const rig={names:['Root','Child'],pose:[[0,0,0],[0,0,0]],keys:[],channels:[{id:'root:0',keys:[{frame:0,value:0,easing:'smooth'},{frame:24,value:1,easing:'smooth'}]}]};
+const next=setRigTravelPoint(rig,0,24,expected,100);assert.equal(rig.channels[0].keys[1].value,1);assert.equal(next.channels[0].keys[1].easing,'smooth');assert.deepEqual(sampleChannel(next,24,'root',[0,0,0]),expected);
+const other=setRigTravelPoint(rig,1,24,expected,100);assert.ok(other.channels.some(c=>c.id==='position:1:2'));assert.deepEqual(other.channels[0],rig.channels[0]);
+console.log('3D path conversion passed: rotated/scaled parent, rest offset, frozen drag space, zero-scale rejection, root/actor channel mapping, existing timing and source isolation.');

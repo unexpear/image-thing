@@ -1,0 +1,137 @@
+{
+  "version": 1,
+  "id": "demo-starlight-v3",
+  "title": "The Last Starlight \u00b7 animation pass 3",
+  "style": "Original 2D cutout cartoon. Midnight teal, warm gold, coral. Mira is a silent mint-metal robot with a yellow scarf, always grounded. Pip is a coral bird.",
+  "synopsis": "36-second third animation pass: distance-driven planted feet, lifted passing poses, reflected edges, cel shadows, selective surface marks and smooth scene dissolves. Authored animation is baked into six clips; keep their order for continuity.",
+  "assets": [
+    {
+      "id": "mira-demo",
+      "kind": "character",
+      "name": "Mira",
+      "brief": "Silent mint robot, yellow scarf, cyan eyes. Cannot fly."
+    },
+    {
+      "id": "pip-demo",
+      "kind": "character",
+      "name": "Pip",
+      "brief": "Small coral bird with a gold beak."
+    },
+    {
+      "id": "observatory-demo",
+      "kind": "set",
+      "name": "Mountain observatory",
+      "brief": "Teal night, distant mountains and a warm-lit dome."
+    }
+  ],
+  "scenes": [
+    {
+      "id": "starlight-scene",
+      "title": "Trailer \u00b7 36 seconds",
+      "shots": [
+        {
+          "id": "starlight-shot-1",
+          "title": "A light on the mountain",
+          "seconds": 6,
+          "action": "Mira walks toward the observatory as Pip flies ahead.",
+          "camera": "Continuous repair staging with eased push-in; centered scene dissolves baked into boundary clips.",
+          "dialogue": "No spoken dialogue. Original synthesized celesta and warm chord bed.",
+          "media": {
+            "name": "shot-01.mp4",
+            "subfolder": "demo-starlight-v3",
+            "type": "input"
+          },
+          "production": {
+            "Animation": "Ready for review",
+            "Sound": "Ready for review"
+          }
+        },
+        {
+          "id": "starlight-shot-2",
+          "title": "The broken telescope",
+          "seconds": 6,
+          "action": "Mira and Pip discover the telescope mount is missing its gear.",
+          "camera": "Continuous repair staging with eased push-in; centered scene dissolves baked into boundary clips.",
+          "dialogue": "No spoken dialogue. Original synthesized celesta and warm chord bed.",
+          "media": {
+            "name": "shot-02.mp4",
+            "subfolder": "demo-starlight-v3",
+            "type": "input"
+          },
+          "production": {
+            "Animation": "Ready for review",
+            "Sound": "Ready for review"
+          }
+        },
+        {
+          "id": "starlight-shot-3",
+          "title": "Small engineers",
+          "seconds": 6,
+          "action": "Pip carries the golden gear into the telescope mount while Mira reaches to help.",
+          "camera": "Continuous repair staging with eased push-in; centered scene dissolves baked into boundary clips.",
+          "dialogue": "No spoken dialogue. Original synthesized celesta and warm chord bed.",
+          "media": {
+            "name": "shot-03.mp4",
+            "subfolder": "demo-starlight-v3",
+            "type": "input"
+          },
+          "production": {
+            "Animation": "Ready for review",
+            "Sound": "Ready for review"
+          }
+        },
+        {
+          "id": "starlight-shot-4",
+          "title": "First light",
+          "seconds": 6,
+          "action": "The repaired telescope lights up. Mira celebrates as Pip hovers.",
+          "camera": "Continuous repair staging with eased push-in; centered scene dissolves baked into boundary clips.",
+          "dialogue": "No spoken dialogue. Original synthesized celesta and warm chord bed.",
+          "media": {
+            "name": "shot-04.mp4",
+            "subfolder": "demo-starlight-v3",
+            "type": "input"
+          },
+          "production": {
+            "Animation": "Ready for review",
+            "Sound": "Ready for review"
+          }
+        },
+        {
+          "id": "starlight-shot-5",
+          "title": "A sky full of possibility",
+          "seconds": 6,
+          "action": "The friends watch a constellation appear above the mountain.",
+          "camera": "Continuous repair staging with eased push-in; centered scene dissolves baked into boundary clips.",
+          "dialogue": "No spoken dialogue. Original synthesized celesta and warm chord bed.",
+          "media": {
+            "name": "shot-05.mp4",
+            "subfolder": "demo-starlight-v3",
+            "type": "input"
+          },
+          "production": {
+            "Animation": "Ready for review",
+            "Sound": "Ready for review"
+          }
+        },
+        {
+          "id": "starlight-shot-6",
+          "title": "The Last Starlight",
+          "seconds": 6,
+          "action": "Mira waves beside the title while Pip flutters nearby.",
+          "camera": "Continuous repair staging with eased push-in; centered scene dissolves baked into boundary clips.",
+          "dialogue": "No spoken dialogue. Original synthesized celesta and warm chord bed.",
+          "media": {
+            "name": "shot-06.mp4",
+            "subfolder": "demo-starlight-v3",
+            "type": "input"
+          },
+          "production": {
+            "Animation": "Ready for review",
+            "Sound": "Ready for review"
+          }
+        }
+      ]
+    }
+  ]
+}

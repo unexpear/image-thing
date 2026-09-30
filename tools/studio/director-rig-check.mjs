@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import {defaultRig,validateRigs,layerMatrix,transformPoint,localPoint} from '../../simple-editor/director-rig.js';
+const root={id:'root',rig:{...defaultRig(),pivotX:100,pivotY:100,angle:90,x:20}},child={id:'child',rig:{...defaultRig(),parent:'root',x:10}};
+const layers=[root,child];validateRigs(layers);const m=layerMatrix(layers,child),p=transformPoint(m,[150,100]);assert.ok(Math.abs(p[0]-120)<1e-8&&Math.abs(p[1]-160)<1e-8);
+const original=localPoint(m,p);assert.ok(Math.abs(original[0]-150)<1e-8&&Math.abs(original[1]-100)<1e-8);
+root.rig.parent='child';assert.throws(()=>validateRigs(layers),/cycle/);root.rig.parent=null;
+child.rig.parent='missing';assert.throws(()=>validateRigs(layers),/parent/);child.rig.parent='root';
+child.rig.angle=NaN;assert.throws(()=>validateRigs(layers),/angle/);
+assert.deepEqual(layerMatrix([{id:'plain'}],{id:'plain'}),[1,0,0,1,0,0]);
+console.log('Rig math passed: parent rotation/translation, inverse drawing coordinates, legacy identity, invalid parents/cycles/angles.');

@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {sampleMotion,validateMotion,hasDrawingAnimation} from '../../simple-editor/director-motion.js';
+import {setChannelKeyValue} from '../../simple-editor/director-channels.js';
+import {sampleRig3D,sampleChannel,validateRig3D,hasRigAnimation} from '../../simple-editor/director-3d-state.js';
+import {retimeKeys} from '../../simple-editor/director-animation-craft.js';
+import {characterSetup} from '../../simple-editor/director-performance-state.js';
+const keys=[{frame:0,value:0,easing:'linear'},{frame:24,value:24,easing:'linear'}];
+const board={layers:[{id:'a',name:'Arm'},{id:'b',name:'Body'}],channels:[{id:'layer:a:x',keys:structuredClone(keys)}]};
+validateMotion(board);assert.ok(hasDrawingAnimation(board));assert.equal(sampleMotion(board,12).layers[0].rig.x,12);assert.equal(sampleMotion(board,12).layers[1].rig.x,0);
+const rig={version:1,model:null,names:['root','hand'],pose:[[0,0,0],[0,0,0]],keys:[],face:[0,0],channels:[{id:'joint:1:2',keys:structuredClone(keys)},{id:'root:0',keys:structuredClone(keys)},{id:'face:1',keys:[{frame:0,value:0,easing:'linear'},{frame:24,value:1,easing:'linear'}]}]};
+const original=JSON.stringify(rig);validateRig3D(rig);assert.ok(hasRigAnimation(rig));assert.equal(sampleRig3D(rig,12)[1][2],12);assert.equal(sampleRig3D(rig,12)[0][2],0);assert.equal(sampleChannel(rig,12,'root',[0,0,0])[0],12);assert.deepEqual(sampleChannel(rig,12,'face',[0,0]),[0,.5]);assert.equal(JSON.stringify(rig),original);
+rig.channels[0].keys=retimeKeys(keys,{start:0,end:24,offset:6,lastFrame:47});assert.equal(sampleRig3D(rig,12)[1][2],6);assert.equal(sampleChannel(rig,12,'root',[0,0,0])[0],12);
+rig.channels[0].enabled=false;assert.equal(sampleRig3D(rig,12)[1][2],0);rig.channels[0].enabled=true;
+rig.limits=[null,[[-5,-5,-5],[5,5,5]]];assert.equal(sampleRig3D(rig,24)[1][2],5);
+const bad=structuredClone(rig);bad.channels.push(structuredClone(bad.channels[0]));assert.throws(()=>validateRig3D(bad),/duplicate/);bad.channels.pop();bad.channels[0].keys[0].value=400;assert.throws(()=>validateRig3D(bad),/value/);
+assert.equal(characterSetup(rig).rig.channels,undefined);
+assert.deepEqual(setChannelKeyValue(keys,24,18),[{frame:0,value:0,easing:'linear'},{frame:24,value:18,easing:'linear'}]);assert.throws(()=>setChannelKeyValue(keys,3,1),/saved key/);assert.deepEqual(keys[1].value,24);
+console.log('Independent channels: 2D parts, 3D joints/root/face, overlap offset, disabled fallback, limits, validation and reusable setup passed.');

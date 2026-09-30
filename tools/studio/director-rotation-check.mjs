@@ -1,0 +1,26 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import * as THREE from 'three';
+import {shortestRotation} from '../../simple-editor/director-rotation.js';
+import {sampleRig3D} from '../../simple-editor/director-3d-state.js';
+import {readRigGLB,jointsOf,faceControls,exportRigGLB} from '../../simple-editor/director-3d-engine.js';
+import {validateBytes} from '../blender/node_modules/gltf-validator/module.mjs';
+import {reviewRigMotion} from '../../simple-editor/director-motion-review.js';
+const q=e=>new THREE.Quaternion().setFromEuler(new THREE.Euler(...e.map(THREE.MathUtils.degToRad),'XYZ'));
+for(let i=0;i<100;i++){const a=[Math.sin(i)*300,i%2?90:-90,Math.cos(i)*180],b=[Math.cos(i*3)*350,i*17%360-180,Math.sin(i*7)*200];for(const t of [0,.1,.5,.9,1])assert.ok(q(shortestRotation(a,b,t)).angleTo(q(a).slerp(q(b),t))<.001,'Three parity '+i);}
+const rig={pose:[[0,0,0]],keys:[{frame:0,pose:[[0,170,0]],easing:'linear'},{frame:10,pose:[[0,-170,0]],easing:'linear'}]};
+assert.deepEqual(sampleRig3D(rig,5),[[0,0,0]]);rig.rotationMode='shortest';assert.ok(q(sampleRig3D(rig,5)[0]).angleTo(q([0,180,0]))<1e-6);
+rig.limits=[[[-180,-180,-180],[180,180,180]]];assert.deepEqual(sampleRig3D(rig,5),[[0,0,0]]);delete rig.limits;
+rig.channels=[{id:'joint:0:0',keys:[{frame:0,value:0,easing:'linear'}]}];assert.deepEqual(sampleRig3D(rig,5),[[0,0,0]]);
+globalThis.ProgressEvent=class{constructor(type,props){Object.assign(this,{type},props);}};
+const project=JSON.parse((await fs.readFile('reports/studio/fixtures/continuous-performance-v2.json','utf8')).replace(/^\uFEFF/,'')),state=project.scenes[0].shots[0].rig3d;
+const bytes=await fs.readFile('ComfyUI_windows_portable/ComfyUI/input/'+state.model.subfolder+'/'+state.model.name),root=await readRigGLB(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength)),bones=jointsOf(root);
+const args={root,bones,rest:bones.map(b=>b.quaternion.clone()),baseRoot:bones[0].position.clone(),morphs:faceControls(root),joint:5,start:0,end:191};
+const before=await reviewRigMotion({...args,rig:state}),after=await reviewRigMotion({...args,rig:{...state,rotationMode:'shortest'}});
+assert.equal(after.issueFrames,0);assert.ok(after.maxStep<before.maxStep*.5);
+globalThis.FileReader=class{readAsArrayBuffer(b){b.arrayBuffer().then(v=>{this.result=v;this.onloadend?.();});}};
+const exported=await exportRigGLB(root,bones,args.rest,{...state,rotationMode:'shortest'},8,args.baseRoot,args.morphs);
+assert.equal((await validateBytes(new Uint8Array(exported))).issues.numErrors,0);
+await fs.writeFile('reports/studio/fixtures/continuous-performance-shortest.glb',Buffer.from(exported));
+const report={before:{maxStep:before.maxStep,frame:before.maxStepFrame},after:{maxStep:after.maxStep,frame:after.maxStepFrame,contactProblems:after.issueFrames},limits:'Reduced maximum step is not proof of appealing acting or collision-free motion.'};
+await fs.writeFile('reports/studio/fixtures/rotation-path-check.json',JSON.stringify(report,null,2));console.log(report);

@@ -1,0 +1,17 @@
+﻿import assert from 'node:assert/strict';
+import {followShots} from '../../simple-editor/director-links.js';
+import {imageReferences} from '../../simple-editor/director-references.js';
+import {validateLipSync,mouthAt,faceWithMouth} from '../../simple-editor/director-lipsync.js';
+import {sampleMotion} from '../../simple-editor/director-motion.js';
+import {sampleChannel} from '../../simple-editor/director-3d-state.js';
+const p={scenes:[{shots:[{id:'a',seconds:5},{id:'b',seconds:5}]}],episodeAudio:[{start:6,anchorShot:'b'},{start:3}]};
+const next=structuredClone(p);next.scenes[0].shots[0].seconds=8;followShots(p,next);assert.equal(next.episodeAudio[0].start,9);assert.equal(next.episodeAudio[1].start,3);
+const deleted=structuredClone(next);deleted.scenes[0].shots.pop();followShots(next,deleted);assert.equal(deleted.episodeAudio[0].start,9);assert.equal(deleted.episodeAudio[0].anchorShot,undefined);
+const sync={mouthCues:[{start:0,end:.5,value:'A'},{start:.5,end:1,value:'D'}]};validateLipSync(sync);assert.equal(mouthAt(sync,.5),'D');assert.equal(mouthAt(sync,1),'X');assert.throws(()=>validateLipSync({mouthCues:[{start:2,end:1,value:'A'}]}));
+assert.deepEqual(faceWithMouth({lipSync:sync,mouthMap:{A:0,D:1}},18,[.2,.2]),[0,1]);
+assert.deepEqual(faceWithMouth({lipSync:sync,mouthMap:{closed:0,wide:1}},18,[.2,.2]),[0,1]);
+assert.deepEqual(sampleChannel({keys:[],face:[0,0],lipSync:sync,mouthMap:{A:0,D:1}},18,'face',[0,0]),[0,1]);
+assert.deepEqual(sampleChannel({keys:[],face:[0,0],lipSync:sync,mouthMap:{closed:0,wide:1}},18,'face',[0,0]),[0,1]);
+const drawing={layers:[{id:'body',name:'Body',visible:true},{id:'a',name:'Mouth A',visible:true},{id:'d',name:'Mouth D',visible:false}],lipSync:sync};const posed=sampleMotion(drawing,18);assert.equal(posed.layers[1].visible,false);assert.equal(posed.layers[2].visible,true);assert.equal(drawing.layers[2].visible,false);
+const file={name:'one.png',type:'input',subfolder:'test'};assert.equal(imageReferences({assets:[{id:'a',kind:'character',file},{id:'b',kind:'character',file:{...file,name:'two.png'}}]},{media:file,assetIds:['a']}).length,1);
+console.log('Gap checks passed: linked/fixed timing, deleted anchors, mouth cue validation, 2D/3D sampling and selected references.');

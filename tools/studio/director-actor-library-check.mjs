@@ -1,0 +1,24 @@
+import fs from 'node:fs/promises';
+import assert from 'node:assert/strict';
+import * as THREE from 'three';
+import {starterCharacter,readRigGLB,jointsOf,faceControls,applyPose,applyChannels} from '../../simple-editor/director-3d-engine.js';
+import {appendStageActor} from '../../simple-editor/director-stage.js';
+import {extractActor} from '../../simple-editor/director-actor-library.js';
+import {hasRigAnimation} from '../../simple-editor/director-3d-state.js';
+import {syncProps} from '../../simple-editor/director-performance-engine.js';
+import {validateBytes} from '../blender/node_modules/gltf-validator/module.mjs';
+globalThis.FileReader=class{readAsArrayBuffer(b){b.arrayBuffer().then(v=>{this.result=v;this.onloadend?.();});}};
+globalThis.ProgressEvent=class{constructor(type,props){Object.assign(this,{type},props);}};
+const bytes=await fs.readFile('reports/studio/fixtures/facial-acting.glb'),root=await readRigGLB(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength)),bones=jointsOf(root),rest=bones.map(b=>b.quaternion.clone()),base=bones[0].position.clone(),faces=faceControls(root);
+const rig={version:1,model:null,names:bones.map(b=>b.name),pose:bones.map(()=>[0,0,0]),keys:[],face:faces.map(()=>0),eyeMap:{blinkLeft:0,blinkRight:1}};
+const combined=await appendStageActor({root,rest,baseRoot:base,rig,actor:starterCharacter(),name:'Guest',position:[1.6,0,.3],yaw:20,baseFaces:faces.map(c=>c.base)}),cb=jointsOf(combined.root),cr=cb.map(b=>b.quaternion.clone()),cf=faceControls(combined.root);
+const hat=new THREE.Mesh(new THREE.BoxGeometry(.2,.1,.2),new THREE.MeshStandardMaterial({color:'#ed3344'}));hat.name='Attached hat';hat.position.y=.5;cb[17].add(hat);
+combined.rig.props=[{id:'room',name:'Room prop',shape:'box',joint:null,position:[3,0,0],rotation:[0,0,0],size:[1,1,1],color:'#ffffff'},{id:'held',name:'Held prop',shape:'box',joint:20,position:[0,0,0],rotation:[0,0,0],size:[.1,.1,.1],color:'#ffffff'}];syncProps(combined.root,cb,combined.rig);
+combined.rig.pose[17]=[10,0,0];combined.rig.keys=[{frame:0,pose:structuredClone(combined.rig.pose)}];combined.rig.channels=[{id:'position:15:0',keys:[{frame:0,value:.4}]}];const before=JSON.stringify(combined.rig);
+const args={root:combined.root,rig:combined.rig,rest:cr,baseRoot:cb[0].position.clone(),baseFaces:cf.map(c=>c.base)},guest=await extractActor({...args,selected:20}),primary=await extractActor({...args,selected:2});
+assert.equal(JSON.stringify(combined.rig),before);assert.equal(jointsOf(guest.root).length,15);assert.equal(jointsOf(primary.root).length,15);assert.equal(faceControls(guest.root).length,0);assert.equal(faceControls(primary.root).length,6);assert.deepEqual(primary.rig.eyeMap,rig.eyeMap);assert.equal(hasRigAnimation(guest.rig),false);assert.equal(guest.rig.props,undefined);assert.deepEqual(guest.rig.pose[2],[10,0,0]);assert.ok(guest.root.getObjectByName('Attached_hat'));let managed=0;guest.root.traverse(o=>{if(o.userData.studioProp)managed++;});assert.equal(managed,0);
+applyPose(cb,cr,cb.map(()=>[0,0,0]));applyChannels(cb,base,cf,{root:[0,0,0],face:cf.map(()=>0)});combined.root.updateMatrixWorld(true);guest.root.updateMatrixWorld(true);let originalMesh,extractedMesh;combined.root.traverse(o=>{if(o.isSkinnedMesh&&o.skeleton.bones.includes(cb[15]))originalMesh=o;});guest.root.traverse(o=>{if(o.isSkinnedMesh)extractedMesh=o;});
+for(let i=0;i<originalMesh.geometry.attributes.position.count;i++){const a=originalMesh.localToWorld(originalMesh.getVertexPosition(i,new THREE.Vector3())),b=extractedMesh.localToWorld(extractedMesh.getVertexPosition(i,new THREE.Vector3()));assert.ok(a.distanceTo(b)<1e-5,'Rest skin placement drift');}
+for(const result of [guest,primary])assert.equal((await validateBytes(new Uint8Array(result.data))).issues.numErrors,0);
+originalMesh.skeleton.bones[0]=cb[0];await assert.rejects(extractActor({...args,selected:20}),/more than one skeleton/);
+console.log('Individual actor extraction passed: 30→15 joints, isolated eyes/hat, no room or held props, no shot motion, working-pose mapping, unchanged source, world-space rest skin parity, valid GLBs and mixed-skeleton rejection.');

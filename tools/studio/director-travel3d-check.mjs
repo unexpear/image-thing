@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {setRigTravelPoint,sampleScalar} from '../../simple-editor/director-channels.js';
+const rig={names:['Root','Guest'],face:[],channels:[{id:'joint:1:0',keys:[{frame:0,value:30,easing:'hold'}]}]};
+const original=JSON.stringify(rig);
+let next=setRigTravelPoint(rig,1,0,[0,0,0],119);next=setRigTravelPoint(next,1,24,[1,2,3],119);
+assert.equal(JSON.stringify(rig),original);assert.equal(sampleScalar(next.channels,'position:1:2',12,0),1.5);assert.deepEqual(next.channels[0],rig.channels[0]);
+next=setRigTravelPoint(next,0,10,[2,0,-1],119);assert.equal(sampleScalar(next.channels,'root:0',50,0),2);
+const old=JSON.stringify(next);assert.throws(()=>setRigTravelPoint(next,1,12,[0,NaN,0],119),/value/);assert.equal(JSON.stringify(next),old);
+assert.throws(()=>setRigTravelPoint(next,2,0,[0,0,0],119),/joint/);
+assert.throws(()=>setRigTravelPoint(next,1,120,[0,0,0],119),/frame/);
+const disabled=structuredClone(next);disabled.channels.find(c=>c.id==='position:1:0').enabled=false;assert.throws(()=>setRigTravelPoint(disabled,1,0,[0,0,0],119),/Enable/);
+console.log('3D travel point checks passed: paired XYZ, root/actor separation, interpolation, unrelated rotation retention, bounds and source preservation.');

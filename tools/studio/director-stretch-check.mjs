@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {defaultRig,layerMatrix,transformPoint,localPoint,solveLimb,validateRigs} from '../../simple-editor/director-rig.js';
+import {sampleMotion,validateMotion,capturePose} from '../../simple-editor/director-motion.js';
+const near=(a,b,e=1e-7)=>assert.ok(Math.abs(a-b)<e,`${a} != ${b}`);
+const layers=[{id:'upper',rig:{...defaultRig(),pivotX:100,pivotY:100,stretch:1.4}},{id:'lower',rig:{...defaultRig(),parent:'upper',pivotX:100,pivotY:200,stretch:.8}},{id:'end',rig:{...defaultRig(),parent:'lower',pivotX:100,pivotY:300}}];
+validateRigs(layers);const m=layerMatrix(layers,layers[0]);near(m[0]*m[3]-m[1]*m[2],1);assert.deepEqual(transformPoint(m,[100,100]),[100,100]);const point=[150,175],inverse=localPoint(m,transformPoint(m,point));near(inverse[0],point[0]);near(inverse[1],point[1]);
+const posed=structuredClone(layers);posed[0].rig.angle=20;posed[1].rig.angle=-45;const target=transformPoint(layerMatrix(posed,posed[2]),[100,300]),source=JSON.stringify(layers),solution=solveLimb(layers,'end',target,-1);assert.equal(JSON.stringify(layers),source);assert.equal(solution.clamped,false);
+for(const p of solution.poses)layers.find(l=>l.id===p.id).rig.angle=p.angle;const contact=transformPoint(layerMatrix(layers,layers[2]),[100,300]);near(contact[0],target[0],.5);near(contact[1],target[1],.5);
+const board={layers:[{id:'a',rig:defaultRig()}],keyframes:[{frame:0,easing:'linear',poses:[{id:'a',x:0,y:0,angle:0,stretch:1}]},{frame:24,easing:'linear',poses:[{id:'a',x:0,y:0,angle:0,stretch:.5}]}]};validateMotion(board);near(sampleMotion(board,12).layers[0].rig.stretch,.75);near(capturePose(sampleMotion(board,24))[0].stretch,.5);
+board.channels=[{id:'layer:a:stretch',keys:[{frame:0,value:2,easing:'hold'}]}];validateMotion(board);near(sampleMotion(board,12).layers[0].rig.stretch,2);
+board.channels[0].keys[0].value=0;assert.throws(()=>validateMotion(board),/value/);assert.throws(()=>validateRigs([{id:'bad',rig:{...defaultRig(),stretch:0}}]),/Stretch/);
+console.log('Stretch checks passed: pivot/area preservation, inverse drawing coordinates, scaled limb contact, nonmutation, pose interpolation, scalar channel and bounds.');

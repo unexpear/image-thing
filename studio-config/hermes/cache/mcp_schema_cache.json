@@ -1,0 +1,86 @@
+{
+  "studio": {
+    "fingerprint": "8c255047b187e3fe",
+    "tools": [
+      {
+        "name": "extract_cartoon_shot",
+        "description": "Use Needle 3 on CPU to extract one shot. Compare every field with the original request; output is fallible. No project mutation.",
+        "inputSchema": {},
+        "annotations": {
+          "readOnlyHint": false
+        }
+      }
+    ],
+    "utility_tools": [
+      {
+        "schema": {
+          "name": "mcp__studio__list_resources",
+          "description": "List available resources from MCP server 'studio'",
+          "parameters": {
+            "type": "object",
+            "properties": {}
+          }
+        },
+        "handler_key": "list_resources"
+      },
+      {
+        "schema": {
+          "name": "mcp__studio__read_resource",
+          "description": "Read a resource by URI from MCP server 'studio'",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "uri": {
+                "type": "string",
+                "description": "URI of the resource to read"
+              }
+            },
+            "required": [
+              "uri"
+            ]
+          }
+        },
+        "handler_key": "read_resource"
+      },
+      {
+        "schema": {
+          "name": "mcp__studio__list_prompts",
+          "description": "List available prompts from MCP server 'studio'",
+          "parameters": {
+            "type": "object",
+            "properties": {}
+          }
+        },
+        "handler_key": "list_prompts"
+      },
+      {
+        "schema": {
+          "name": "mcp__studio__get_prompt",
+          "description": "Get a prompt by name from MCP server 'studio'",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Name of the prompt to retrieve"
+              },
+              "arguments": {
+                "type": "object",
+                "description": "Optional arguments to pass to the prompt",
+                "properties": {},
+                "additionalProperties": true
+              }
+            },
+            "required": [
+              "name"
+            ]
+          }
+        },
+        "handler_key": "get_prompt"
+      }
+    ],
+    "ttl_ms": 0,
+    "written_at": 1789932536.4108503,
+    "cache_scope": "private"
+  }
+}

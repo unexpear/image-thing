@@ -1,0 +1,21 @@
+model:
+  default: bonsai-2-27b
+  provider: custom
+  base_url: http://127.0.0.1:8089/v1
+  api_key: local
+  context_length: 65536
+  max_tokens: 768
+memory:
+  memory_enabled: false
+  user_profile_enabled: false
+skills:
+  creation_nudge_interval: 0
+agent:
+  max_turns: 6
+mcp_servers:
+  studio:
+    url: http://127.0.0.1:8191/mcp
+    timeout: 90
+    connect_timeout: 30
+    tools:
+      include: [extract_cartoon_shot]

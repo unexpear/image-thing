@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import {makeRigAsset,instantiateRigAsset} from '../../simple-editor/director-rig-library.js';
+import {newProject,validateProject} from '../../simple-editor/director-project.js';
+const rig={version:1,model:{name:'cast.glb',type:'input',subfolder:'studio-director'},names:['Root','Hand'],pose:[[0,0,0],[0,0,30]],keys:[{frame:0,easing:'smooth',pose:[[0,0,0],[0,0,0]]}],face:[0],eyeMap:{blinkLeft:0},expressions:[{name:'Blink',face:[1]}],channels:[{id:'position:1:0',keys:[{frame:0,value:.2,easing:'linear'}]}],props:[{id:'prop',name:'Box',shape:'box',color:'#ffffff',joint:1,position:[0,0,0],rotation:[0,0,0],size:[1,1,1],attachments:[{frame:0,joint:null,position:[0,0,0],rotation:[0,0,0],size:[1,1,1]}]}]};
+const before=JSON.stringify(rig),asset=makeRigAsset(rig,'Main cast','set'),project=newProject();project.assets.push(asset);validateProject(project);assert.equal(JSON.stringify(rig),before);assert.equal(asset.rigSetup.rig.keys.length,0);assert.equal(asset.rigSetup.rig.channels,undefined);assert.equal(asset.rigSetup.rig.props[0].attachments,undefined);assert.equal(asset.rigSetup.rig.model.name,'cast.glb');assert.equal(asset.rigSetup.rig.eyeMap.blinkLeft,0);assert.equal(asset.rigSetup.rig.expressions.length,1);
+const a=instantiateRigAsset(asset),b=instantiateRigAsset(asset);a.pose[1][2]=90;a.props[0].color='#000000';assert.equal(b.pose[1][2],30);assert.equal(asset.rigSetup.rig.props[0].color,'#ffffff');
+const loaded=JSON.parse(JSON.stringify(project));validateProject(loaded);assert.equal(instantiateRigAsset(loaded.assets[0]).model.name,'cast.glb');
+assert.throws(()=>makeRigAsset(rig,''),/name/);assert.throws(()=>makeRigAsset(rig,'Prop','prop'),/entry/);
+loaded.assets[0].rigSetup.rig.channels=rig.channels;assert.throws(()=>validateProject(loaded),/shot animation/);delete loaded.assets[0].rigSetup.rig.channels;loaded.assets[0].rigSetup.rig.model.name='../bad.glb';assert.throws(()=>validateProject(loaded),/reference/);
+console.log('Rig library passed: project persistence, isolated instances, retained models/poses/expressions/props, cleared shot animation and invalid-entry rejection.');

@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "jobs_enabled": false,
+  "blender_enabled": false,
+  "memory_profiles_enabled": false,
+  "mcp_enabled": false,
+  "parametric_enabled": false,
+  "memory_profile": "existing",
+  "heavy_execution": "serialized",
+  "ram_floor_bytes": 2147483648,
+  "disk_floor_bytes": 5368709120,
+  "verified_profiles": {
+    "existing": {
+      "effective": "baseline"
+    }
+  }
+}

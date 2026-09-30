@@ -1,0 +1,12 @@
+import fs from 'node:fs/promises';
+import assert from 'node:assert/strict';
+import {validateDrawing} from '../../simple-editor/director-drawing.js';
+import {sampleMotion} from '../../simple-editor/director-motion.js';
+const read=async name=>JSON.parse((await fs.readFile('reports/studio/fixtures/'+name,'utf8')).replace(/^\uFEFF/,''));
+const before=await read('performance-review-before.json'),after=await read('continuous-composite-project.json');
+const shot=after.scenes[0].shots[0];
+assert.deepEqual(shot.rig3d,before.scenes[0].shots[0].rig3d);
+assert.equal(shot.drawing.over3d,true);validateDrawing(shot.drawing);
+for(const [frame,count] of [[0,0],[103,0],[104,6],[106,6],[107,0],[191,0]])assert.equal(sampleMotion(shot.drawing,frame).layers[0].strokes.length,count);
+assert.notEqual(shot.media.name,before.scenes[0].shots[0].media.name);
+console.log('Saved composite performance: original rig unchanged, timed accent boundaries and blank return, opt-in flag and new recording retained. Visual proof is the browser and decoded recording, not this state check.');

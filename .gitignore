@@ -1,0 +1,71 @@
+# Secrets & local env
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
+**/credentials*.json
+
+# Dependencies & caches
+node_modules/
+.venv/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache/
+
+# Large / generated local trees (not source of truth for the Director)
+ComfyUI_windows_portable/
+downloads/
+output/
+logs/
+backups/
+Temp/
+temp/
+.tmp/
+.playwright-cli/
+studio-data/
+workflows/*.safetensors
+**/*.safetensors
+**/*.ckpt
+**/*.pt
+**/*.pth
+**/*.bin
+**/*.onnx
+**/*.gguf
+
+# Nested tool checkouts / heavy optional trees
+tools/hermes-agent/
+tools/hermes-runtime/
+tools/mmathen/
+studio-3d/
+studio-mcp/.venv/
+studio-mcp/**/node_modules/
+desktop/dist/
+desktop/node_modules/
+mobiale games/
+tools/studio-three/package/node_modules/
+tools/studio-three/*.tgz
+tools/rhubarb/
+reports/studio/
+reports/*.json
+reports/*.html
+reports/*.txt
+
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+*.log
+
+# Local agent / report dumps (optional noise)
+reports/*.png
+reports/*.mp4
+reports/*.webm

@@ -1,0 +1,28 @@
+
+
+ENGINE ONLY. Overview-style dashed ghost + time chip on shot media **trim scrub bar**. Reuses ormatOverviewTime + sibling helpers. In/out handles + peaks kept. **Zero writes under D:\\mmathEn.** Vendored pin stays **a1c8f3e**. No commit. No chipzzzd.
+
+Ran ~2026-09-28 21:00 ET. Node. 
+pm run check:director → **17 PASS / 0 FAIL**.
+
+### What shipped
+
+| Piece | Path |
+|---|---|
+| hoverTimeFromClientX, drawHoverTimeChip (ghost + chip); overview canvas calls shared drawer | simple-editor/director-audio-overview.js |
+| Media-trim hover canvas; pointermove/leave; status hover readout; keeps yellow in/out + peaks | simple-editor/director.js (mediaTrimScrub) |
+| .media-trim-hover overlay (z-index under thumbs); track crosshair | simple-editor/director.css |
+| Unit coverage for clientX→time + chip label mock | 	ools/studio/director-audio-overview-check.mjs |
+
+**UX:** Hovering the shot-media trim scrub strip shows the same dashed vertical ghost + dark time chip as the audio overview needle hover (12.35s / 1:05.50). Chip sits above peaks/range fill; yellow in/out handles still drag. Status line adds hover … while the pointer is over the strip. No seek on hover — handles remain the write path for source in/out.
+
+**Deploy:** Ran Deploy-Editor.ps1 (JS+CSS under /qwen-editor/). Reload Director (Ctrl+R). **No ComfyUI restart** — frontend only.
+
+### Still open / next
+
+1. Trim scrub hover time chip — **kept** (just shipped).
+2. Parent drawings still use the **current drawing frame** texture (no per-frame cel sequence in GLB).
+3. Screen-space (non-parented) over-3D drawings remain record-clip only.
+4. Optional leftovers: waveform server polish if any suffix gap remains.
+
+Recommend next: **cel/frame texture bake for parent drawings**.

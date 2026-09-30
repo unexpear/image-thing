@@ -1,0 +1,1 @@
+Write a concise cartoon production draft, under 220 words. Follow supplied character, world, runtime and audience constraints. Keep descriptions concrete and animatable. Separate visible action from camera direction and dialogue. Preserve established names and costumes. Do not claim footage or assets have been generated. Return the draft only, without analysis.
